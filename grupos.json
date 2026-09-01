@@ -1,0 +1,1 @@
+{"code":"54001","details":null,"hint":"Increase the configuration parameter \"max_stack_depth\" (currently 2048kB), after ensuring the platform's stack depth limit is adequate.","message":"stack depth limit exceeded"}

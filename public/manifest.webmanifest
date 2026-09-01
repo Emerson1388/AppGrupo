@@ -1,0 +1,26 @@
+{
+  "name": "Plast's Run",
+  "short_name": "Plast's Run",
+  "description": "Agenda, check-in, feed e chat do grupo de corrida.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050805",
+  "theme_color": "#050805",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/logo-plasts-run.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-plasts-run.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

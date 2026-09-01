@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-card-2: var(--card-2);
+  --color-line: var(--line);
+  --color-ember: var(--ember);
+  --color-ember-dim: var(--ember-dim);
+  --color-lime: var(--lime);
+  --color-sand: var(--sand);
+  --color-on-accent: var(--on-accent);
+}
+
+:root,
+html.dark {
+  --bg: #050805;
+  --card: #0c120c;
+  --card-2: #121a12;
+  --line: #1c2a1c;
+  --ink: #eaffea;
+  --muted: #7d8f7d;
+  --sand: #b5d4b0;
+  --ember: #39ff14;
+  --ember-dim: #1db800;
+  --lime: #b8ff3d;
+  --on-accent: #050805;
+}
+
+html.light {
+  --bg: #f4faf1;
+  --card: #ffffff;
+  --card-2: #eaf4e4;
+  --line: #d3e4cc;
+  --ink: #102010;
+  --muted: #5b7058;
+  --sand: #3d533c;
+  --ember: #1fbf00;
+  --ember-dim: #148a00;
+  --lime: #168000;
+  --on-accent: #052005;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: var(--ember);
+  color: var(--on-accent);
+}
+
+input[type="date"],
+input[type="time"] {
+  color-scheme: inherit;
+}
