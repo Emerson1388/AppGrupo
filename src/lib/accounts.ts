@@ -73,7 +73,12 @@ export async function createPendingAccount(input: {
 export async function verifyLogin(email: string, password: string) {
   const accounts = loadAccounts()
   const idx = accounts.findIndex((a) => a.email.toLowerCase() === email.trim().toLowerCase())
-  if (idx < 0) return { error: "E-mail ou senha incorretos." as const }
+  if (idx < 0) {
+    return {
+      error:
+        "Essa conta não existe neste aparelho. No celular é preciso criar a conta de novo — o cadastro do computador não passa sozinho." as const,
+    }
+  }
   const account = accounts[idx]
   if (account.lockedUntil && new Date(account.lockedUntil).getTime() > Date.now()) {
     return { error: "Conta temporariamente bloqueada. Tente de novo em alguns minutos." as const }

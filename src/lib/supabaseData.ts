@@ -34,7 +34,9 @@ type ProfileRow = {
 export function authErrorMessage(raw: string) {
   const m = raw.toLowerCase()
   if (m.includes("email not confirmed")) return "Confirme seu e-mail antes de entrar."
-  if (m.includes("invalid login")) return "E-mail ou senha incorretos."
+  if (m.includes("invalid login")) {
+    return "E-mail ou senha não conferem. Confira se o e-mail foi confirmado ou use Esqueci a senha. Se nunca cadastrou neste app, crie a conta."
+  }
   if (m.includes("already registered") || m.includes("already been registered")) {
     return "Esse e-mail já está cadastrado."
   }

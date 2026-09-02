@@ -33,7 +33,7 @@ export function Login() {
   return (
     <AuthShell>
       <p className="mt-4 text-lg leading-snug text-sand">
-        Entre com e-mail e senha. A senha não é armazenada em texto puro.
+        Entre com o e-mail e a senha do cadastro. A mesma conta vale no celular e no computador.
       </p>
 
       <div className="mt-8 rounded-3xl border border-line bg-card p-5">
@@ -64,7 +64,17 @@ export function Login() {
               Esqueci a senha
             </Link>
           </div>
-          {error && <p className="text-sm text-ember">{error}</p>}
+          {error && (
+            <div className="space-y-1">
+              <p className="text-sm text-ember">{error}</p>
+              <p className="text-xs text-muted">
+                Primeira vez neste celular?{" "}
+                <Link to="/cadastro" className="font-semibold text-lime">
+                  Criar conta
+                </Link>
+              </p>
+            </div>
+          )}
           <button
             type="submit"
             disabled={busy}

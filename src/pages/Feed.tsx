@@ -1,10 +1,11 @@
 import { useMemo, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
-import { Heart, MessageCircle, Trash2, ImagePlus } from "lucide-react"
+import { Heart, MessageCircle, Trash2, ImagePlus, Pencil } from "lucide-react"
 import { useApp } from "../context/AppContext"
 import { formatQuando } from "../lib/format"
 import { StoriesBar } from "../components/StoriesBar"
 import { SpotifyLink } from "../components/SpotifyLink"
+import { PhotoEditor } from "../components/PhotoEditor"
 import type { Checkin, Publicacao } from "../types"
 
 type Item =
@@ -17,6 +18,7 @@ export function Feed() {
   const [texto, setTexto] = useState("")
   const [km, setKm] = useState("")
   const [midiaUrl, setMidiaUrl] = useState<string>()
+  const [editSrc, setEditSrc] = useState<string>()
   const [openComments, setOpenComments] = useState<string | null>(null)
   const [draft, setDraft] = useState("")
 
@@ -46,12 +48,16 @@ export function Feed() {
     setTexto("")
     setKm("")
     setMidiaUrl(undefined)
+    setEditSrc(undefined)
   }
 
   function onFile(file: File | undefined) {
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => setMidiaUrl(String(reader.result))
+    reader.onload = () => {
+      const src = String(reader.result)
+      setEditSrc(src)
+    }
     reader.readAsDataURL(file)
   }
 
@@ -85,7 +91,29 @@ export function Feed() {
           />
         </div>
         {midiaUrl && (
-          <img src={midiaUrl} alt="" className="mt-3 max-h-48 w-full rounded-2xl object-cover" />
+          <div className="relative mt-3">
+            <img src={midiaUrl} alt="" className="max-h-48 w-full rounded-2xl object-cover" />
+            <div className="absolute right-2 bottom-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setEditSrc(midiaUrl)}
+                className="inline-flex items-center gap-1 rounded-full bg-bg/90 px-3 py-1.5 text-[11px] font-bold"
+              >
+                <Pencil size={12} />
+                Ajeitar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMidiaUrl(undefined)
+                  setEditSrc(undefined)
+                }}
+                className="rounded-full bg-bg/90 px-3 py-1.5 text-[11px] font-bold text-ember"
+              >
+                Tirar
+              </button>
+            </div>
+          </div>
         )}
         <div className="mt-3 flex items-center justify-between gap-3">
           <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-muted">
@@ -95,7 +123,10 @@ export function Feed() {
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => onFile(e.target.files?.[0])}
+              onChange={(e) => {
+                onFile(e.target.files?.[0])
+                e.target.value = ""
+              }}
             />
           </label>
           <input
@@ -113,6 +144,17 @@ export function Feed() {
           </button>
         </div>
       </form>
+
+      {editSrc && (
+        <PhotoEditor
+          src={editSrc}
+          onCancel={() => setEditSrc(undefined)}
+          onDone={(dataUrl) => {
+            setMidiaUrl(dataUrl)
+            setEditSrc(undefined)
+          }}
+        />
+      )}
 
       {items.map((item) => {
         if (item.kind === "checkin") {

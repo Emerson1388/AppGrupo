@@ -245,20 +245,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [data])
 
   const login = useCallback(async (email: string, password: string) => {
+    const mail = email.trim().toLowerCase()
     if (supabaseEnabled && supabase) {
       const { data: authData, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: mail,
         password,
       })
-      if (error) return authErrorMessage(error.message)
-      if (authData.user) {
+      if (!error && authData.user) {
         const next = await hydrateFromSupabase(authData.user, loadState())
         if (!next) return "Conta criada, mas o perfil não apareceu. Rode supabase/connect.sql no SQL Editor."
         setData(next)
         return null
       }
+      const local = await verifyLogin(mail, password)
+      if (!local.error && local.account.profileId) {
+        setData((d) => ({ ...d, currentUserId: local.account.profileId }))
+        return null
+      }
+      if (error) return authErrorMessage(error.message)
     }
-    const result = await verifyLogin(email, password)
+    const result = await verifyLogin(mail, password)
     if (result.error) return result.error
     const profileId = result.account.profileId
     if (!profileId) return "Conta ainda não ativada. Confirme o e-mail."
