@@ -27,8 +27,8 @@ export function Convite() {
           {ok ? grupo.nome : "Grupo"}
         </h1>
         <p className="mt-3 text-sand">
-          Entre com este link e você vira membro: agenda de treinos, check-in, feed e mensagens
-          privadas com o clube.
+          Cadastre uma vez — no celular ou no computador. Depois a mesma senha entra nos dois:
+          agenda, check-in, feed e mensagens do clube.
         </p>
         <Link
           to="/cadastro"

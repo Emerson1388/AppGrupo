@@ -42,6 +42,12 @@ import type {
 } from "../types"
 
 const STORAGE_KEY = "runclub.v2"
+const CLOUD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function cloudUserId(id: string | null | undefined) {
+  if (supabaseEnabled) return id && CLOUD_ID.test(id) ? id : null
+  return id ?? null
+}
 
 type RankingRow = {
   profile: Profile
@@ -128,7 +134,7 @@ function loadState(): AppData {
       usuarioConquistas: parsed.usuarioConquistas ?? [],
       mensagens: parsed.mensagens ?? [],
       stories: parsed.stories ?? [],
-      currentUserId: parsed.currentUserId ?? null,
+      currentUserId: cloudUserId(parsed.currentUserId),
     }
   } catch {
     return initialData
@@ -257,11 +263,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setData(next)
         return null
       }
+
       const local = await verifyLogin(mail, password)
-      if (!local.error && local.account.profileId) {
-        setData((d) => ({ ...d, currentUserId: local.account.profileId }))
-        return null
+      if (!local.error) {
+        const { data: created, error: signErr } = await supabase.auth.signUp({
+          email: mail,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            data: { nome: local.account.nome, nivel: local.account.nivel },
+          },
+        })
+        if (created.session?.user) {
+          const next = await hydrateFromSupabase(created.session.user, loadState())
+          if (next) {
+            setData(next)
+            return null
+          }
+        }
+        const already = Boolean(signErr?.message.toLowerCase().includes("already"))
+        if (!already && created.user && !created.session) {
+          return "Conta na nuvem criada. Confirme o e-mail — depois a mesma senha entra no celular e no computador."
+        }
       }
+
       if (error) return authErrorMessage(error.message)
     }
     const result = await verifyLogin(mail, password)
@@ -296,19 +321,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { error: "Esse e-mail já está no grupo." }
     }
     if (supabaseEnabled && supabase) {
-      const redirect = `${window.location.origin}/auth/callback`
-      const { error } = await supabase.auth.signUp({
-        email: input.email.trim(),
+      const mail = input.email.trim().toLowerCase()
+      const { data: created, error } = await supabase.auth.signUp({
+        email: mail,
         password: input.password,
         options: {
-          emailRedirectTo: redirect,
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: { nome: input.nome.trim(), nivel: input.nivel },
         },
       })
       if (error) return { error: authErrorMessage(error.message) }
+      if (created.session?.user) {
+        const next = await hydrateFromSupabase(created.session.user, loadState())
+        if (!next) return { error: "Conta criada, mas o perfil não apareceu. Rode supabase/connect.sql no SQL Editor." }
+        setData(next)
+        return { error: null }
+      }
       return {
         error: null,
-        pendingEmail: input.email.trim().toLowerCase(),
+        pendingEmail: mail,
       }
     }
     const created = await createPendingAccount(input)

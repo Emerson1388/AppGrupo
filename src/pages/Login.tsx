@@ -33,7 +33,8 @@ export function Login() {
   return (
     <AuthShell>
       <p className="mt-4 text-lg leading-snug text-sand">
-        Entre com o e-mail e a senha do cadastro. A mesma conta vale no celular e no computador.
+        Use o mesmo e-mail e a mesma senha em qualquer aparelho. A conta fica na nuvem, não só neste
+        celular ou computador.
       </p>
 
       <div className="mt-8 rounded-3xl border border-line bg-card p-5">

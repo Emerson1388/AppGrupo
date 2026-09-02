@@ -39,15 +39,20 @@ export function Cadastro() {
       setError(result.error)
       return
     }
-    navigate("/verificar-email", {
-      state: { email: result.pendingEmail, confirmToken: result.confirmToken },
-    })
+    if (result.pendingEmail) {
+      navigate("/verificar-email", {
+        state: { email: result.pendingEmail, confirmToken: result.confirmToken },
+      })
+      return
+    }
+    navigate("/")
   }
 
   return (
     <AuthShell>
       <p className="mt-4 text-sm text-muted">
-        Cadastro no Plast's Run. A conta só é ativada depois da confirmação por e-mail.
+        Cadastre uma vez. A mesma senha entra no computador e no celular. Se o app pedir, confirme o
+        e-mail antes do primeiro login no outro aparelho.
       </p>
 
       <form onSubmit={(e) => void onSubmit(e)} className="mt-8 space-y-4">

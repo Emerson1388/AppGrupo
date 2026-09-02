@@ -18,7 +18,8 @@ export function VerificarEmail() {
       </p>
       {supabaseEnabled ? (
         <p className="mt-3 text-xs text-muted">
-          Abra a caixa de entrada (e o spam). O link vale 24 horas.
+          Abra a caixa de entrada (e o spam). Depois de confirmar, a mesma senha entra no celular e
+          no computador. O link vale 24 horas.
         </p>
       ) : (
         <p className="mt-3 text-xs text-muted">
