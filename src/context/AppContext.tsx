@@ -68,7 +68,6 @@ type AppContextValue = {
   confirmEmail: (token: string) => string | null
   requestPasswordReset: (email: string) => Promise<{ token: string | null }>
   resetPassword: (token: string, password: string) => Promise<string | null>
-  exportMyData: () => Record<string, unknown> | null
   deleteMyAccount: () => void
   updateMe: (patch: Partial<Profile>) => void
   rsvp: (treinoId: string) => void
@@ -373,19 +372,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const result = await completePasswordReset(token, password)
     return result.error
   }, [])
-
-  const exportMyData = useCallback(() => {
-    if (!me) return null
-    return {
-      titular: { nome: me.nome, email: me.email, nivel: me.nivel, meta: me.meta },
-      grupo: data.grupo.nome,
-      treinos: data.checkins.filter((c) => c.usuarioId === me.id),
-      publicacoes: data.publicacoes.filter((p) => p.usuarioId === me.id),
-      mensagens: data.mensagens.filter((m) => m.deId === me.id || m.paraId === me.id),
-      geradoEm: new Date().toISOString(),
-      baseLegal: "Art. 18, V da LGPD — portabilidade",
-    }
-  }, [data, me])
 
   const deleteMyAccount = useCallback(() => {
     if (!me) return
@@ -698,7 +684,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confirmEmail,
       requestPasswordReset,
       resetPassword,
-      exportMyData,
       deleteMyAccount,
       updateMe,
       rsvp,
@@ -731,7 +716,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confirmEmail,
       requestPasswordReset,
       resetPassword,
-      exportMyData,
       deleteMyAccount,
       updateMe,
       rsvp,

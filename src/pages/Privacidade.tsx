@@ -20,9 +20,8 @@ export function Privacidade() {
           presença e permitir conversa no clube. Não vendemos dados.
         </p>
         <p>
-          <strong className="text-ink">Seus direitos:</strong> acesso, correção, exclusão,
-          portabilidade e revogação do consentimento (art. 18). No perfil: exportar dados ou apagar a
-          conta.
+          <strong className="text-ink">Seus direitos:</strong> acesso, correção, exclusão e
+          revogação do consentimento (art. 18). No perfil: apagar a conta.
         </p>
         <p>
           <strong className="text-ink">Retenção:</strong> enquanto a conta existir. Ao excluir, os

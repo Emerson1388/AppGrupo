@@ -37,7 +37,7 @@ function resizePhoto(file: File): Promise<string> {
 
 export function Perfil() {
   const { id } = useParams()
-  const { me, data, ranking, profileById, treinoById, updateMe, logout, exportMyData, deleteMyAccount } =
+  const { me, data, ranking, profileById, treinoById, updateMe, logout, deleteMyAccount } =
     useApp()
   const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>("posts")
@@ -232,23 +232,6 @@ export function Perfil() {
           >
             <LogOut size={16} />
             Sair do aplicativo
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const payload = exportMyData()
-              if (!payload) return
-              const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement("a")
-              a.href = url
-              a.download = "meus-dados-plasts-run.json"
-              a.click()
-              URL.revokeObjectURL(url)
-            }}
-            className="w-full rounded-xl border border-line px-3 py-3 text-left text-sm font-semibold"
-          >
-            Baixar meus dados
           </button>
           <button
             type="button"
