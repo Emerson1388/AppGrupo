@@ -9,6 +9,9 @@ function fromHex(hex: string) {
 }
 
 async function pbkdf2(password: string, salt: Uint8Array) {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("crypto-indisponivel")
+  }
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(password),

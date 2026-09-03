@@ -22,6 +22,7 @@ import {
 } from "../lib/accounts"
 import { passwordIssues } from "../lib/password"
 import { supabase, supabaseEnabled } from "../lib/supabase"
+import type { User } from "@supabase/supabase-js"
 import {
   authErrorMessage,
   hydrateFromSupabase,
@@ -260,44 +261,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const mail = email.trim().toLowerCase()
+    const pass = password.trim()
+    const redirect = `${window.location.origin}/auth/callback`
+
+    const finishCloud = async (user: User) => {
+      const next = await hydrateFromSupabase(user, loadState())
+      if (!next) return "Conta criada, mas o perfil não apareceu. Rode supabase/connect.sql no SQL Editor."
+      setData(next)
+      return null
+    }
+
     if (supabaseEnabled && supabase) {
-      const { data: authData, error } = await supabase.auth.signInWithPassword({
-        email: mail,
-        password,
-      })
-      if (!error && authData.user) {
-        const next = await hydrateFromSupabase(authData.user, loadState())
-        if (!next) return "Conta criada, mas o perfil não apareceu. Rode supabase/connect.sql no SQL Editor."
-        setData(next)
-        return null
+      const first = await supabase.auth.signInWithPassword({ email: mail, password: pass })
+      if (!first.error && first.data.user) return finishCloud(first.data.user)
+
+      const unconfirmed = first.error?.message.toLowerCase().includes("email not confirmed")
+      if (unconfirmed) {
+        await supabase.auth.resend({
+          type: "signup",
+          email: mail,
+          options: { emailRedirectTo: redirect },
+        })
+        return authErrorMessage(first.error.message)
       }
 
-      const local = await verifyLogin(mail, password)
+      const local = await verifyLogin(mail, pass)
       if (!local.error) {
-        const { data: created, error: signErr } = await supabase.auth.signUp({
+        await supabase.auth.signUp({
           email: mail,
-          password,
+          password: pass,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: redirect,
             data: { nome: local.account.nome, nivel: local.account.nivel },
           },
         })
-        if (created.session?.user) {
-          const next = await hydrateFromSupabase(created.session.user, loadState())
-          if (next) {
-            setData(next)
-            return null
-          }
-        }
-        const already = Boolean(signErr?.message.toLowerCase().includes("already"))
-        if (!already && created.user && !created.session) {
-          return "Conta na nuvem criada. Confirme o e-mail — depois a mesma senha entra no celular e no computador."
+        const again = await supabase.auth.signInWithPassword({ email: mail, password: pass })
+        if (!again.error && again.data.user) return finishCloud(again.data.user)
+        if (again.error?.message.toLowerCase().includes("email not confirmed")) {
+          await supabase.auth.resend({
+            type: "signup",
+            email: mail,
+            options: { emailRedirectTo: redirect },
+          })
+          return "Conta gravada na nuvem. Confirme o e-mail e entre de novo no celular com a mesma senha."
         }
       }
 
-      if (error) return authErrorMessage(error.message)
+      if (first.error) return authErrorMessage(first.error.message)
     }
-    const result = await verifyLogin(mail, password)
+    const result = await verifyLogin(mail, pass)
     if (result.error) return result.error
     const profileId = result.account.profileId
     if (!profileId) return "Conta ainda não ativada. Confirme o e-mail."
@@ -330,17 +342,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (supabaseEnabled && supabase) {
       const mail = input.email.trim().toLowerCase()
+      const pass = input.password.trim()
+      const redirect = `${window.location.origin}/auth/callback`
       const { data: created, error } = await supabase.auth.signUp({
         email: mail,
-        password: input.password,
+        password: pass,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: redirect,
           data: { nome: input.nome.trim(), nivel: input.nivel },
         },
       })
       if (error) return { error: authErrorMessage(error.message) }
-      if (created.session?.user) {
-        const next = await hydrateFromSupabase(created.session.user, loadState())
+      const sessionUser = created.session?.user
+        ?? (
+          await supabase.auth.signInWithPassword({ email: mail, password: pass })
+        ).data.user
+      if (sessionUser) {
+        const next = await hydrateFromSupabase(sessionUser, loadState())
         if (!next) return { error: "Conta criada, mas o perfil não apareceu. Rode supabase/connect.sql no SQL Editor." }
         setData(next)
         return { error: null }

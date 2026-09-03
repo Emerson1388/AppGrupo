@@ -83,7 +83,15 @@ export async function verifyLogin(email: string, password: string) {
   if (account.lockedUntil && new Date(account.lockedUntil).getTime() > Date.now()) {
     return { error: "Conta temporariamente bloqueada. Tente de novo em alguns minutos." as const }
   }
-  const ok = await verifyPassword(password, account.passwordHash, account.salt)
+  let ok = false
+  try {
+    ok = await verifyPassword(password, account.passwordHash, account.salt)
+  } catch {
+    return {
+      error:
+        "Neste celular a senha local não valida. Use o link https do app ou entre com a conta da nuvem." as const,
+    }
+  }
   if (!ok) {
     account.failedLogins += 1
     if (account.failedLogins >= 5) {

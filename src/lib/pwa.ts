@@ -1,5 +1,7 @@
 export function phoneUrl(path = "/g/plasts-run") {
   if (typeof window === "undefined") return path
+  const published = import.meta.env.VITE_PUBLIC_APP_URL?.replace(/\/$/, "")
+  if (published) return `${published}${path}`
   const host = window.location.hostname
   let origin = window.location.origin
   if (host === "localhost" || host === "127.0.0.1") {
