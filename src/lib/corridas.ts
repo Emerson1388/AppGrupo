@@ -1,3 +1,5 @@
+import { provasFallback } from "../data/provas-fallback"
+
 export type FonteCorrida = "corridasderuars" | "runsignup" | "wikidata" | "clube" | "fallback"
 
 export type CorridaEvento = {
@@ -71,12 +73,50 @@ export function eventoNaRegiao(e: CorridaEvento, filtro: FiltroRegiao) {
   return e.pais !== "BR" && e.fonte !== "corridasderuars" && e.fonte !== "fallback"
 }
 
+export function provasNoIntervalo(start?: string, end?: string) {
+  return provasFallback.filter((e) => {
+    if (start && e.data < start) return false
+    if (end && e.data > end) return false
+    return true
+  })
+}
+
+export function mesclarProvasReserva(
+  eventos: CorridaEvento[],
+  start?: string,
+  end?: string,
+): CorridaEvento[] {
+  const seen = new Set(
+    eventos.map((e) => `${e.data}|${e.titulo.toLowerCase().replace(/\s+/g, " ").slice(0, 48)}`),
+  )
+  const extra = provasNoIntervalo(start, end).filter((e) => {
+    const key = `${e.data}|${e.titulo.toLowerCase().replace(/\s+/g, " ").slice(0, 48)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  return [...eventos, ...extra].sort((a, b) =>
+    `${a.data}${a.horario ?? ""}`.localeCompare(`${b.data}${b.horario ?? ""}`),
+  )
+}
+
 export async function buscarCorridas(params?: { start?: string; end?: string }) {
   const qs = new URLSearchParams()
   if (params?.start) qs.set("start", params.start)
   if (params?.end) qs.set("end", params.end)
   const url = `/api/corridas${qs.toString() ? `?${qs}` : ""}`
-  const res = await fetch(url)
-  if (!res.ok) throw new Error("Não foi possível carregar o calendário de provas.")
-  return (await res.json()) as CorridasResposta
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error("api")
+    const data = (await res.json()) as CorridasResposta
+    const eventos = mesclarProvasReserva(data.eventos ?? [], params?.start, params?.end)
+    return { ...data, eventos }
+  } catch {
+    const eventos = provasNoIntervalo(params?.start, params?.end)
+    return {
+      eventos,
+      fontes: [{ id: "fallback" as const, nome: "Calendário local", ok: true, quantidade: eventos.length }],
+      geradoEm: new Date().toISOString(),
+    }
+  }
 }

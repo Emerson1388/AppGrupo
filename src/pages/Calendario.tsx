@@ -44,7 +44,7 @@ export function Calendario() {
   const { data } = useApp()
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()))
   const [selecionado, setSelecionado] = useState(() => new Date())
-  const [regiao, setRegiao] = useState<FiltroRegiao>("poa")
+  const [regiao, setRegiao] = useState<FiltroRegiao>("rs")
   const [eventos, setEventos] = useState<CorridaEvento[]>([])
   const [fontes, setFontes] = useState<FonteStatus[]>([])
   const [erro, setErro] = useState<string | null>(null)

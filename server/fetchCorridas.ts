@@ -212,10 +212,16 @@ export async function montarCorridas(start: string, end: string): Promise<Corrid
   ])
 
   const rsOk = fontes.find((f) => f.id === "corridasderuars")?.ok
-  if (!rsOk) {
+  const br = chunks.flat().filter((e) => e.pais === "BR" || e.fonte === "corridasderuars")
+  if (!rsOk || br.length === 0) {
     const fb = provasFallback.filter((e: CorridaEvento) => e.data >= start && e.data <= end)
     chunks.push(fb)
-    fontes.push({ id: "fallback", nome: "Calendário local (reserva)", ok: true, quantidade: fb.length })
+    fontes.push({
+      id: "fallback",
+      nome: "Calendário local (reserva)",
+      ok: true,
+      quantidade: fb.length,
+    })
   }
 
   const eventos = dedupe(chunks.flat()).sort((a, b) =>

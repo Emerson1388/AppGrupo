@@ -49,6 +49,14 @@ function cloudUserId(id: string | null | undefined) {
   return id ?? null
 }
 
+const SEED_TREINO_IDS = new Set(initialData.treinos.map((t) => t.id))
+
+function mergeSeedTreinos(saved: Treino[] | undefined) {
+  if (!saved?.length) return initialData.treinos
+  if (saved.every((t) => SEED_TREINO_IDS.has(t.id))) return initialData.treinos
+  return saved
+}
+
 type RankingRow = {
   profile: Profile
   km: number
@@ -122,7 +130,7 @@ function loadState(): AppData {
             : initialData.grupo.spotifyUrl,
       },
       profiles: parsed.profiles,
-      treinos: parsed.treinos ?? initialData.treinos,
+      treinos: mergeSeedTreinos(parsed.treinos),
       participacoes: parsed.participacoes ?? [],
       checkins: parsed.checkins ?? [],
       publicacoes: parsed.publicacoes ?? [],
