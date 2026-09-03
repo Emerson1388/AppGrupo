@@ -273,9 +273,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (supabaseEnabled && supabase) {
       const first = await supabase.auth.signInWithPassword({ email: mail, password: pass })
-      if (!first.error && first.data.user) return finishCloud(first.data.user)
+      const firstUser = first.data.user
+      const firstErr = first.error
+      const firstMsg = firstErr == null ? "" : firstErr.message
+      if (!firstMsg && firstUser) return finishCloud(firstUser)
 
-      const firstMsg = first.error?.message ?? ""
       const unconfirmed = firstMsg.toLowerCase().includes("email not confirmed")
       if (unconfirmed) {
         await supabase.auth.resend({
@@ -297,8 +299,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           },
         })
         const again = await supabase.auth.signInWithPassword({ email: mail, password: pass })
-        if (!again.error && again.data.user) return finishCloud(again.data.user)
-        if (again.error?.message.toLowerCase().includes("email not confirmed")) {
+        const againUser = again.data.user
+        const againErr = again.error
+        const againMsg = againErr == null ? "" : againErr.message
+        if (!againMsg && againUser) return finishCloud(againUser)
+        if (againMsg.toLowerCase().includes("email not confirmed")) {
           await supabase.auth.resend({
             type: "signup",
             email: mail,
@@ -308,11 +313,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (first.error) return authErrorMessage(first.error.message)
+      if (firstMsg) return authErrorMessage(firstMsg)
     }
     const result = await verifyLogin(mail, pass)
     if (result.error) return result.error
-    const profileId = result.account.profileId
+    const profileId = "account" in result ? result.account.profileId : null
     if (!profileId) return "Conta ainda não ativada. Confirme o e-mail."
     setData((d) => ({ ...d, currentUserId: profileId }))
     return null
