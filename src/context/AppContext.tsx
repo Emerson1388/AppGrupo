@@ -275,14 +275,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const first = await supabase.auth.signInWithPassword({ email: mail, password: pass })
       if (!first.error && first.data.user) return finishCloud(first.data.user)
 
-      const unconfirmed = first.error?.message.toLowerCase().includes("email not confirmed")
+      const firstMsg = first.error?.message ?? ""
+      const unconfirmed = firstMsg.toLowerCase().includes("email not confirmed")
       if (unconfirmed) {
         await supabase.auth.resend({
           type: "signup",
           email: mail,
           options: { emailRedirectTo: redirect },
         })
-        return authErrorMessage(first.error.message)
+        return authErrorMessage(firstMsg)
       }
 
       const local = await verifyLogin(mail, pass)
