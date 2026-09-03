@@ -1,4 +1,4 @@
-import type { CorridaEvento } from "../lib/corridas"
+import type { CorridaEvento } from "../lib/corridas.ts"
 
 /** Usado só se as APIs ao vivo falharem. Datas de calendários públicos 2026. */
 export const provasFallback: CorridaEvento[] = [

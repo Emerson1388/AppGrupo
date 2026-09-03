@@ -2,7 +2,7 @@ import os from "node:os"
 import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
-import { corridasApiPlugin } from "./vite-plugin-corridas"
+import { corridasApiPlugin } from "./vite-plugin-corridas.ts"
 
 function lanIP() {
   const nets = os.networkInterfaces()

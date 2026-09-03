@@ -1,5 +1,5 @@
 import type { Plugin } from "vite"
-import { fetchCorridasFromRequest } from "./server/fetchCorridas"
+import { fetchCorridasFromRequest } from "./server/fetchCorridas.ts"
 
 function attach(server: {
   middlewares: {

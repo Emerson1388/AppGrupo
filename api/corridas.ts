@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
-import { fetchCorridasFromRequest } from "../server/fetchCorridas"
+import { fetchCorridasFromRequest } from "../server/fetchCorridas.ts"
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method === "OPTIONS") {

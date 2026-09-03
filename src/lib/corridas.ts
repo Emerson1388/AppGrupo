@@ -1,4 +1,4 @@
-import { provasFallback } from "../data/provas-fallback"
+import { provasFallback } from "../data/provas-fallback.ts"
 
 export type FonteCorrida = "corridasderuars" | "runsignup" | "wikidata" | "clube" | "fallback"
 

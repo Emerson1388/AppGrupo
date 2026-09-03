@@ -1,4 +1,4 @@
-import { provasFallback } from "../src/data/provas-fallback"
+import { provasFallback } from "../src/data/provas-fallback.ts"
 import {
   decodeHtml,
   parseDistancias,
@@ -6,7 +6,7 @@ import {
   type CorridaEvento,
   type CorridasResposta,
   type FonteStatus,
-} from "../src/lib/corridas"
+} from "../src/lib/corridas.ts"
 
 const UA = "PlastsRun/1.0 (calendario do clube)"
 const CACHE_MS = 15 * 60 * 1000

@@ -287,7 +287,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       const local = await verifyLogin(mail, pass)
-      if (!local.error) {
+      if (!local.error && "account" in local && local.account) {
         await supabase.auth.signUp({
           email: mail,
           password: pass,
