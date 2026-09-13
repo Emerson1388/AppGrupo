@@ -1,5 +1,5 @@
 import os from "node:os"
-import { defineConfig } from "vite"
+import { defineConfig } from "vitest/config"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 import { corridasApiPlugin } from "./vite-plugin-corridas.ts"
@@ -31,4 +31,10 @@ export default defineConfig({
     __LAN_ORIGIN__: JSON.stringify(lanOrigin),
   },
   appType: "spa",
+  test: {
+    environment: "jsdom",
+    setupFiles: "./src/test/setup.ts",
+    globals: true,
+    css: true,
+  },
 })
