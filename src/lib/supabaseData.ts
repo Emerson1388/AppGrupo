@@ -74,6 +74,23 @@ export function cloudErrorMessage(raw: string) {
   return "Não foi possível salvar. Tente de novo."
 }
 
+export const DEFAULT_AVATAR = "/avatar-default.svg"
+
+export function officialFotoUrl(raw: string | null | undefined) {
+  if (!raw) return DEFAULT_AVATAR
+  if (raw.startsWith("data:") || raw.startsWith("blob:")) return DEFAULT_AVATAR
+  if (raw.includes("pravatar.cc")) return DEFAULT_AVATAR
+  return raw
+}
+
+export function embeddedFotoError(url: string | undefined) {
+  if (!url) return null
+  if (url.startsWith("data:") || url.startsWith("blob:")) {
+    return "A foto precisa ir para o armazenamento do grupo, não como arquivo embutido."
+  }
+  return null
+}
+
 export function mapGrupo(row: GrupoRow): Grupo {
   return {
     id: row.id,
@@ -94,7 +111,7 @@ export function mapProfile(row: ProfileRow, fallbackEmail: string): Profile {
     grupoId: row.grupo_id || "",
     nome: row.nome,
     email,
-    fotoUrl: row.foto_url || `https://i.pravatar.cc/200?u=${encodeURIComponent(email)}`,
+    fotoUrl: officialFotoUrl(row.foto_url),
     dataNascimento: row.data_nascimento ?? undefined,
     distanciaPreferida: row.distancia_preferida ?? undefined,
     paceMedio: row.pace_medio ?? undefined,
@@ -175,6 +192,8 @@ export async function hydrateFromSupabase(
 }
 
 export async function saveProfilePatch(id: string, patch: Partial<Profile>) {
+  const fotoErro = embeddedFotoError(patch.fotoUrl)
+  if (fotoErro) return { error: fotoErro }
   if (!supabase) return { error: null }
   const row: Record<string, string | undefined> = {}
   if (patch.nome !== undefined) row.nome = patch.nome

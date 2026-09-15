@@ -21,8 +21,10 @@ Backup Git: `5c32260` (`backup antes das correcoes AppGrupo`).
 1. `supabase/schema.sql` (se o projeto for novo)
 2. `supabase/sync.sql`
 3. `supabase/migrations/20260914_hardening.sql`
-4. Opcional: `supabase/liberar-login.sql`
-5. `select public.promover_admin('seu@email');` para o treinador
+4. `supabase/migrations/20260915_convite_slug.sql`
+5. `supabase/migrations/20260916_foto_perfil.sql`
+6. Opcional: `supabase/liberar-login.sql`
+7. `select public.promover_admin('seu@email');` para o treinador
 
 ## 2. Arquitetura
 
@@ -47,6 +49,7 @@ React + Vite
 - Persist sem checar `error`
 - Hidratação misturava mock
 - Convite anônimo não lia o grupo no banco
+- Foto de perfil diferente no computador vs. celular (pravatar/data URL)
 
 ### P1
 - Foto/story em data URL
@@ -90,7 +93,7 @@ Mesmas tabelas. Novos: RPC `excluir_minha_conta`, `promover_admin`, `handle_new_
 
 ## 10. Storage
 
-Bucket `midia` com pastas `avatars/`, `posts/`, `stories/`. MIME e tamanho validados no cliente. Policies por pasta do `auth.uid()`.
+Bucket `midia` com pastas `avatars/`, `posts/`, `stories/`. Foto de perfil em `{userId}/avatars/profile.jpg` (upsert) + `profiles.foto_url`. MIME e tamanho validados no cliente. Policies por pasta do `auth.uid()`.
 
 ## 11. Mobile
 
@@ -129,6 +132,7 @@ Playwright, segundo grupo real, confirmação de e-mail oficial, Edge Function p
 | P0-05 | Ranking por post | P0 | Corrigido | `rankingService.ts` | Só check-in |
 | P0-06 | Persist ignora error | P0 | Corrigido | `supabaseSync.ts` | Retorna erro amigável |
 | P1-01 | Data URL | P1 | Corrigido no código | `mediaService.ts` | Upload Storage |
+| P0-07 | Foto diferente no celular | P0 | Corrigido no código | `Perfil.tsx`, `supabaseData.ts` | Storage → `foto_url`; sem pravatar/data URL |
 | P1-02 | Delete = logout | P1 | Corrigido no código | RPC `excluir_minha_conta` | Apaga perfil e cascata |
 | P1-03 | Mock na nuvem | P1 | Corrigido | `supabaseSync.ts` | Sem fallback de mock |
 | P2-01 | PWA cache | P2 | Corrigido | `public/sw.js` | `appgrupo-v3` |
@@ -146,3 +150,30 @@ Playwright, segundo grupo real, confirmação de e-mail oficial, Edge Function p
 [ ] bucket criado no painel/SQL
 [x] build/lint/testes unitários
 ```
+
+## BUG-P0-07 — Foto de perfil divergente entre dispositivos
+
+Severidade: **P0** (mesmo usuário, duas fotos oficiais)
+
+Causa:
+- `mapProfile` inventava um `pravatar` por e-mail quando `profiles.foto_url` era nulo.
+- A troca de foto gerava Data URL (`FileReader` + `canvas.toDataURL`) e podia gravar isso no estado local **antes** do Supabase responder.
+- Se o upload falhava, um aparelho ficava com a foto local e o outro hidratava do banco (nulo → pravatar, ou URL antiga).
+- `localStorage` (`runclub.v2`) não sobrescreve a foto quando o Supabase está ligado; o problema era fonte de verdade errada no perfil, não cópia entre aparelhos.
+
+Correção:
+- Fonte única: bucket `midia` → `{userId}/avatars/profile.jpg` (upsert) → `profiles.foto_url`.
+- Data URL / blob / pravatar são tratados como “sem foto” (`/avatar-default.svg`).
+- `saveProfilePatch` recusa Data URL mesmo no modo demo de testes.
+- `updateMe` só aplica a foto no React **depois** do UPDATE no banco.
+- Preview local só enquanto o upload roda; depois a URL pública substitui.
+
+Teste:
+- Unidade: `officialFotoUrl`, `mapProfile`, `saveProfilePatch` recusa Data URL, caminho `avatarObjectPath`.
+- Conceitual: login → foto visível → alterar → recarregar → mesma URL.
+- Notebook → celular / celular → notebook: **pendente em aparelhos reais** depois de rodar `20260916_foto_perfil.sql`.
+
+Resultado:
+- Código / testes: **PASS**
+- Multidispositivo real: **PENDENTE** (não declarado PASS sem os dois aparelhos)
+

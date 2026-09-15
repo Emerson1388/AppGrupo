@@ -108,6 +108,10 @@ on storage.objects for update
 using (
   bucket_id = 'midia'
   and auth.uid()::text = (storage.foldername(name))[1]
+)
+with check (
+  bucket_id = 'midia'
+  and auth.uid()::text = (storage.foldername(name))[1]
 );
 
 create policy "midia delete proprio"

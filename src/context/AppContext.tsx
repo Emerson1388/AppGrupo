@@ -27,6 +27,8 @@ import { supabase, supabaseEnabled } from "../lib/supabase"
 import type { User } from "@supabase/supabase-js"
 import {
   authErrorMessage,
+  DEFAULT_AVATAR,
+  embeddedFotoError,
   saveGrupoSpotify,
   saveProfilePatch,
 } from "../lib/supabaseData"
@@ -137,7 +139,7 @@ type AppContextValue = {
   requestPasswordReset: (email: string) => Promise<{ token: string | null }>
   resetPassword: (token: string, password: string) => Promise<string | null>
   deleteMyAccount: () => void
-  updateMe: (patch: Partial<Profile>) => void
+  updateMe: (patch: Partial<Profile>) => Promise<string | null>
   rsvp: (treinoId: string) => void
   checkin: (treinoId: string, metodo?: CheckinMetodo) => Promise<string | null>
   checkinByToken: (token: string) => Promise<string | null>
@@ -421,7 +423,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       grupoId: data.grupo.id,
       nome: account.nome,
       email: account.email,
-      fotoUrl: `https://i.pravatar.cc/200?u=${encodeURIComponent(account.email)}`,
+      fotoUrl: DEFAULT_AVATAR,
       nivel: account.nivel,
       role: data.profiles.length === 0 ? "admin" : "atleta",
       meta: "Começar e não parar",
@@ -488,20 +490,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
   }, [me])
 
-  const updateMe = useCallback((patch: Partial<Profile>) => {
+  const updateMe = useCallback(async (patch: Partial<Profile>) => {
     const safe = { ...patch }
     delete safe.role
     delete safe.grupoId
+    const fotoErro = embeddedFotoError(safe.fotoUrl)
+    if (supabaseEnabled && fotoErro) {
+      setCloudError(fotoErro)
+      return fotoErro
+    }
+    const userId = dataRef.current.currentUserId
+    if (userId && supabaseEnabled) {
+      const res = await saveProfilePatch(userId, safe)
+      if (res?.error) {
+        setCloudError(res.error)
+        return res.error
+      }
+    }
     setData((d) => ({
       ...d,
       profiles: d.profiles.map((p) => (p.id === d.currentUserId ? { ...p, ...safe } : p)),
     }))
-    if (data.currentUserId && supabaseEnabled) {
-      void saveProfilePatch(data.currentUserId, safe).then((res) => {
-        if (res?.error) setCloudError(res.error)
-      })
-    }
-  }, [data.currentUserId])
+    return null
+  }, [])
 
   const rsvp = useCallback((treinoId: string) => {
     const userId = dataRef.current.currentUserId

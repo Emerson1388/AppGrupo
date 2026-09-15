@@ -4,11 +4,11 @@ import { Camera, LogOut } from "lucide-react"
 import { useApp, roleLabel } from "../context/AppContext"
 import { formatDia, formatQuando, kmLabel } from "../lib/format"
 import { supabaseEnabled } from "../lib/supabase"
-import { uploadDataUrl } from "../services/mediaService"
+import { assertMediaFile, uploadAvatar } from "../services/mediaService"
 
 type Tab = "posts" | "historico" | "conquistas"
 
-function resizePhoto(file: File): Promise<string> {
+function resizePhoto(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onerror = () => reject(new Error("Falha ao ler a foto"))
@@ -23,17 +23,36 @@ function resizePhoto(file: File): Promise<string> {
         canvas.height = size
         const ctx = canvas.getContext("2d")
         if (!ctx) {
-          resolve(String(reader.result))
+          reject(new Error("Não foi possível preparar a foto"))
           return
         }
         const w = img.width * scale
         const h = img.height * scale
         ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h)
-        resolve(canvas.toDataURL("image/jpeg", 0.85))
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error("Não foi possível compactar a foto"))
+              return
+            }
+            resolve(blob.type === "image/jpeg" ? blob : new Blob([blob], { type: "image/jpeg" }))
+          },
+          "image/jpeg",
+          0.85,
+        )
       }
       img.src = String(reader.result)
     }
     reader.readAsDataURL(file)
+  })
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error("Falha ao ler a foto"))
+    reader.readAsDataURL(blob)
   })
 }
 
@@ -44,6 +63,8 @@ export function Perfil() {
   const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>("posts")
   const [fotoErro, setFotoErro] = useState<string | null>(null)
+  const [fotoBusy, setFotoBusy] = useState(false)
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null)
 
   const profile = id ? profileById(id) : me
   const mine = Boolean(profile && me && profile.id === me.id)
@@ -66,14 +87,39 @@ export function Perfil() {
   }, [data.conquistas, data.usuarioConquistas, profile?.id])
 
   async function onFoto(file: File | undefined) {
-    if (!file || !mine) return
+    if (!file || !mine || fotoBusy) return
     setFotoErro(null)
+    setFotoBusy(true)
+    let preview: string | null = null
     try {
-      const dataUrl = await resizePhoto(file)
-      const fotoUrl = supabaseEnabled ? await uploadDataUrl("avatars", dataUrl) : dataUrl
-      updateMe({ fotoUrl })
-    } catch {
-      setFotoErro("Não deu para usar essa imagem. Tente outra foto.")
+      assertMediaFile(file, "avatars")
+      const blob = await resizePhoto(file)
+      preview = URL.createObjectURL(blob)
+      setFotoPreview(preview)
+      if (supabaseEnabled) {
+        const fotoUrl = await uploadAvatar(blob)
+        const err = await updateMe({ fotoUrl })
+        if (err) {
+          setFotoErro(err)
+          return
+        }
+      } else {
+        const err = await updateMe({ fotoUrl: await blobToDataUrl(blob) })
+        if (err) {
+          setFotoErro(err)
+          return
+        }
+      }
+    } catch (caught) {
+      setFotoErro(
+        caught instanceof Error
+          ? caught.message
+          : "Não deu para usar essa imagem. Tente outra foto.",
+      )
+    } finally {
+      if (preview) URL.revokeObjectURL(preview)
+      setFotoPreview(null)
+      setFotoBusy(false)
     }
   }
 
@@ -87,7 +133,7 @@ export function Perfil() {
           {mine ? (
             <label className="relative -mt-10 inline-block cursor-pointer">
               <img
-                src={profile.fotoUrl}
+                src={fotoPreview ?? profile.fotoUrl}
                 alt=""
                 className="h-20 w-20 rounded-full object-cover ring-4 ring-card"
               />
@@ -96,9 +142,14 @@ export function Perfil() {
               </span>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 className="hidden"
-                onChange={(e) => void onFoto(e.target.files?.[0])}
+                disabled={fotoBusy}
+                onChange={(e) => {
+                  const chosen = e.target.files?.[0]
+                  e.target.value = ""
+                  void onFoto(chosen)
+                }}
               />
             </label>
           ) : (
@@ -109,7 +160,9 @@ export function Perfil() {
             />
           )}
           {mine && (
-            <p className="mt-2 text-xs font-semibold text-ember">Trocar foto</p>
+            <p className="mt-2 text-xs font-semibold text-ember">
+              {fotoBusy ? "Enviando foto…" : "Trocar foto"}
+            </p>
           )}
           {fotoErro && <p className="mt-1 text-xs text-ember">{fotoErro}</p>}
           <h1 className="mt-3 font-display text-3xl font-extrabold">{profile.nome}</h1>

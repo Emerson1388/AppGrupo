@@ -169,7 +169,7 @@ create policy "ver colegas" on public.profiles
   for select using (grupo_id = public.meu_grupo_id());
 
 create policy "editar próprio perfil" on public.profiles
-  for update using (id = auth.uid());
+  for update using (id = auth.uid()) with check (id = auth.uid());
 
 create policy "inserir próprio perfil" on public.profiles
   for insert with check (id = auth.uid());

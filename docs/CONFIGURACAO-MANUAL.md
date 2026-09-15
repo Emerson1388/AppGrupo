@@ -10,7 +10,8 @@ Rode **nesta ordem**, um arquivo por vez:
 2. `supabase/sync.sql` — RLS, RPC de check-in, coluna `distancia_km`.
 3. `supabase/migrations/20260914_hardening.sql` — convite público, Storage `midia`, usuários sempre atleta, `promover_admin`, `excluir_minha_conta`.
 4. `supabase/migrations/20260915_convite_slug.sql` — convite inválido **não** entra no Plast's Run.
-5. Opcional: `supabase/liberar-login.sql` se o segundo aparelho recusar “e-mail não confirmado”.
+5. `supabase/migrations/20260916_foto_perfil.sql` — upsert da foto só na pasta do usuário + update do próprio `profiles`.
+6. Opcional: `supabase/liberar-login.sql` se o segundo aparelho recusar “e-mail não confirmado”.
 
 ## 2. Promover o treinador
 
@@ -26,6 +27,7 @@ O SQL do passo 3 cria o bucket `midia` e as policies. Confira em Storage:
 
 - Bucket: `midia` (público para leitura)
 - Upload só autenticado, pasta `{userId}/avatars|posts|stories/`
+- Foto de perfil oficial: `{userId}/avatars/profile.jpg` → `profiles.foto_url`
 
 Se o insert em `storage.buckets` falhar por permissão, crie o bucket `midia` no painel (público, 20 MB, MIME: jpeg/png/webp/gif/mp4/webm) e rode de novo só as policies de `storage.objects` do arquivo `20260914_hardening.sql`.
 
@@ -53,3 +55,4 @@ VITE_PUBLIC_APP_URL
 - Cadastro no notebook → login.
 - Mesmo e-mail/senha no celular → entra **sem** cadastrar de novo.
 - `/g/plasts-run` mostra o grupo; `/g/nao-existe` **não** oferece cadastro.
+- Trocar a foto no notebook → recarregar no celular → **a mesma foto**.
