@@ -1,4 +1,4 @@
-// RunClub demo store. Swap this layer for Supabase after Auth + schema.sql.
+// Estado do app: Supabase quando as env vars existem; senão, demo local.
 import {
   createContext,
   useCallback,
@@ -25,10 +25,29 @@ import { supabase, supabaseEnabled } from "../lib/supabase"
 import type { User } from "@supabase/supabase-js"
 import {
   authErrorMessage,
-  hydrateFromSupabase,
   saveGrupoSpotify,
   saveProfilePatch,
 } from "../lib/supabaseData"
+import {
+  hydrateGroupData,
+  newEntityId,
+  persistBadges,
+  persistCheckin,
+  persistCheckinByToken,
+  persistComment,
+  persistDeleteAccount,
+  persistDeletePost,
+  persistDeleteStory,
+  persistLike,
+  persistMessage,
+  persistPost,
+  persistReacao,
+  persistRsvp,
+  persistStory,
+  persistStoryView,
+  persistThreadRead,
+  persistTreino,
+} from "../lib/supabaseSync"
 import type {
   AppData,
   CheckinMetodo,
@@ -66,10 +85,33 @@ type RankingRow = {
   presenca: number
 }
 
+function emptyCloudState(): AppData {
+  return {
+    ...initialData,
+    currentUserId: null,
+    profiles: [],
+    treinos: [],
+    participacoes: [],
+    checkins: [],
+    publicacoes: [],
+    curtidas: [],
+    comentarios: [],
+    reacoes: [],
+    usuarioConquistas: [],
+    mensagens: [],
+    stories: [],
+  }
+}
+
+function nextId() {
+  return supabaseEnabled ? newEntityId() : uid("id")
+}
+
 type AppContextValue = {
   data: AppData
   me: Profile | null
   isStaff: boolean
+  authReady: boolean
   ranking: RankingRow[]
   login: (email: string, password: string) => Promise<string | null>
   logout: () => void
@@ -86,8 +128,8 @@ type AppContextValue = {
   deleteMyAccount: () => void
   updateMe: (patch: Partial<Profile>) => void
   rsvp: (treinoId: string) => void
-  checkin: (treinoId: string, metodo?: CheckinMetodo) => string | null
-  checkinByToken: (token: string) => string | null
+  checkin: (treinoId: string, metodo?: CheckinMetodo) => Promise<string | null>
+  checkinByToken: (token: string) => Promise<string | null>
   createTreino: (input: Omit<Treino, "id" | "grupoId" | "qrToken" | "criadoPor">) => void
   createPost: (input: {
     texto: string
@@ -113,6 +155,7 @@ type AppContextValue = {
 const AppContext = createContext<AppContextValue | null>(null)
 
 function loadState(): AppData {
+  if (supabaseEnabled) return emptyCloudState()
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return initialData
@@ -183,34 +226,43 @@ function unlockFor(data: AppData, usuarioId: string, now: string): AppData {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(loadState)
+  const [authReady, setAuthReady] = useState(!supabaseEnabled)
   const dataRef = useRef(data)
   dataRef.current = data
 
   useEffect(() => {
+    if (supabaseEnabled) return
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
   }, [data])
 
   useEffect(() => {
     const client = supabase
-    if (!supabaseEnabled || !client) return
+    if (!supabaseEnabled || !client) {
+      setAuthReady(true)
+      return
+    }
     let cancel = false
     const applyUser = async (userId: string) => {
       const { data: sessionData } = await client.auth.getUser()
       const user = sessionData.user
       if (!user || user.id !== userId) return
-      const next = await hydrateFromSupabase(user, dataRef.current)
+      const next = await hydrateGroupData(user.id, user.email ?? "")
       if (!cancel && next) setData(next)
     }
-    void client.auth.getSession().then(({ data: sessionWrap }) => {
+    void client.auth.getSession().then(async ({ data: sessionWrap }) => {
       const user = sessionWrap.session?.user
-      if (user) void applyUser(user.id)
+      if (user) await applyUser(user.id)
+      if (!cancel) setAuthReady(true)
     })
     const { data: sub } = client.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") return
       if (event === "SIGNED_OUT" || !session?.user) {
-        setData((d) => ({ ...d, currentUserId: null }))
+        setData(emptyCloudState())
         return
       }
-      void applyUser(session.user.id)
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        void applyUser(session.user.id)
+      }
     })
     return () => {
       cancel = true
@@ -265,7 +317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const redirect = `${window.location.origin}/auth/callback`
 
     const finishCloud = async (user: User) => {
-      const next = await hydrateFromSupabase(user, loadState())
+      const next = await hydrateGroupData(user.id, user.email ?? "")
       if (!next) return "Conta criada, mas o perfil não apareceu. Rode supabase/connect.sql no SQL Editor."
       setData(next)
       return null
@@ -364,7 +416,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           await supabase.auth.signInWithPassword({ email: mail, password: pass })
         ).data.user
       if (sessionUser) {
-        const next = await hydrateFromSupabase(sessionUser, loadState())
+        const next = await hydrateGroupData(sessionUser.id, sessionUser.email ?? "")
         if (!next) return { error: "Conta criada, mas o perfil não apareceu. Rode supabase/connect.sql no SQL Editor." }
         setData(next)
         return { error: null }
@@ -391,7 +443,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setData((d) => ({ ...d, currentUserId: account.profileId }))
       return null
     }
-    const id = uid("u")
+    const id = nextId()
     const profile: Profile = {
       id,
       grupoId: data.grupo.id,
@@ -403,7 +455,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       meta: "Começar e não parar",
     }
     const welcome: Publicacao = {
-      id: uid("p"),
+      id: nextId(),
       grupoId: data.grupo.id,
       usuarioId: id,
       texto: `Acabei de entrar no ${data.grupo.nome}. Bora treinar 🏃`,
@@ -446,7 +498,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!me) return
     const id = me.id
     deleteAccountByEmail(me.email)
-    if (supabaseEnabled && supabase) void supabase.auth.signOut()
+    if (supabaseEnabled) void persistDeleteAccount(id)
     setData((d) => ({
       ...d,
       currentUserId: null,
@@ -471,11 +523,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [data.currentUserId])
 
   const rsvp = useCallback((treinoId: string) => {
+    const userId = dataRef.current.currentUserId
+    if (!userId) return
+    const exists = dataRef.current.participacoes.some(
+      (p) => p.usuarioId === userId && p.treinoId === treinoId,
+    )
     setData((d) => {
       if (!d.currentUserId) return d
-      const exists = d.participacoes.some(
-        (p) => p.usuarioId === d.currentUserId && p.treinoId === treinoId,
-      )
       if (exists) {
         return {
           ...d,
@@ -496,73 +550,126 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ],
       }
     })
+    if (supabaseEnabled) void persistRsvp(userId, treinoId, !exists)
   }, [])
 
-  const checkin = useCallback((treinoId: string, metodo: CheckinMetodo = "manual") => {
-    const treino = data.treinos.find((t) => t.id === treinoId)
-    if (!treino || !data.currentUserId) return "Treino não encontrado."
-    if (data.checkins.some((c) => c.usuarioId === data.currentUserId && c.treinoId === treinoId)) {
+  const applyCheckin = useCallback((
+    treinoId: string,
+    metodo: CheckinMetodo,
+    checkinId: string,
+  ) => {
+    const now = new Date().toISOString()
+    const prev = dataRef.current
+    if (!prev.currentUserId) return
+    const next: AppData = {
+      ...prev,
+      checkins: [
+        ...prev.checkins,
+        {
+          id: checkinId,
+          usuarioId: prev.currentUserId,
+          treinoId,
+          dataHora: now,
+          status: "presente",
+          metodo,
+        },
+      ],
+      participacoes: prev.participacoes.some(
+        (p) => p.usuarioId === prev.currentUserId && p.treinoId === treinoId,
+      )
+        ? prev.participacoes
+        : [
+            ...prev.participacoes,
+            { usuarioId: prev.currentUserId, treinoId, createdAt: now },
+          ],
+    }
+    const unlocked = unlockFor(next, prev.currentUserId, now)
+    setData(unlocked)
+    if (supabaseEnabled) {
+      const before = new Set(
+        prev.usuarioConquistas
+          .filter((x) => x.usuarioId === prev.currentUserId)
+          .map((x) => x.conquistaId),
+      )
+      void persistBadges(
+        unlocked.usuarioConquistas.filter(
+          (x) => x.usuarioId === prev.currentUserId && !before.has(x.conquistaId),
+        ),
+      )
+    }
+  }, [])
+
+  const checkin = useCallback(async (treinoId: string, metodo: CheckinMetodo = "manual") => {
+    const current = dataRef.current
+    const treino = current.treinos.find((t) => t.id === treinoId)
+    if (!treino || !current.currentUserId) return "Treino não encontrado."
+    if (current.checkins.some((c) => c.usuarioId === current.currentUserId && c.treinoId === treinoId)) {
       return "Presença já registrada neste treino."
     }
     if (!checkinAberto(treino)) {
       return "Check-in só abre 45 min antes e fecha 3h depois do treino."
     }
-    const now = new Date().toISOString()
-    setData((d) => {
-      if (!d.currentUserId) return d
-      const next: AppData = {
-        ...d,
-        checkins: [
-          ...d.checkins,
-          {
-            id: uid("c"),
-            usuarioId: d.currentUserId,
-            treinoId,
-            dataHora: now,
-            status: "presente",
-            metodo,
-          },
-        ],
-        participacoes: d.participacoes.some(
-          (p) => p.usuarioId === d.currentUserId && p.treinoId === treinoId,
-        )
-          ? d.participacoes
-          : [
-              ...d.participacoes,
-              { usuarioId: d.currentUserId, treinoId, createdAt: now },
-            ],
-      }
-      return unlockFor(next, d.currentUserId, now)
-    })
+    const id = nextId()
+    if (supabaseEnabled) {
+      const saved = await persistCheckin({
+        id,
+        usuarioId: current.currentUserId,
+        treinoId,
+        dataHora: new Date().toISOString(),
+        metodo,
+      })
+      if (saved.error) return saved.error
+      applyCheckin(treinoId, metodo, saved.id)
+      return null
+    }
+    applyCheckin(treinoId, metodo, id)
     return null
-  }, [data.checkins, data.currentUserId, data.treinos])
+  }, [applyCheckin])
 
-  const checkinByToken = useCallback((token: string) => {
-    const treino = data.treinos.find((t) => t.qrToken === token.trim())
+  const checkinByToken = useCallback(async (token: string) => {
+    const code = token.trim()
+    if (supabaseEnabled) {
+      const remote = await persistCheckinByToken(code)
+      if (remote.error) return remote.error
+      if (remote.treinoId) {
+        const already = dataRef.current.checkins.some(
+          (c) => c.usuarioId === dataRef.current.currentUserId && c.treinoId === remote.treinoId,
+        )
+        if (!already) applyCheckin(remote.treinoId, "qr", nextId())
+        return null
+      }
+    }
+    const treino = dataRef.current.treinos.find((t) => t.qrToken === code)
     if (!treino) return "QR Code inválido para este grupo."
     return checkin(treino.id, "qr")
-  }, [checkin, data.treinos])
+  }, [applyCheckin, checkin])
 
   const createTreino = useCallback((input: Omit<Treino, "id" | "grupoId" | "qrToken" | "criadoPor">) => {
-    setData((d) => {
-      if (!d.currentUserId) return d
-      const treino: Treino = {
-        ...input,
-        id: uid("t"),
-        grupoId: d.grupo.id,
-        qrToken: uid("qr"),
-        criadoPor: d.currentUserId,
-      }
-      const post: Publicacao = {
-        id: uid("p"),
-        grupoId: d.grupo.id,
-        usuarioId: d.currentUserId,
-        texto: `Treino na agenda: ${treino.titulo} · ${treino.data.split("-").reverse().join("/")} · ${treino.horario.slice(0, 5)} · ${treino.local}`,
-        tipo: "texto",
-        createdAt: new Date().toISOString(),
-      }
-      return { ...d, treinos: [treino, ...d.treinos], publicacoes: [post, ...d.publicacoes] }
-    })
+    const d = dataRef.current
+    if (!d.currentUserId) return
+    const autor = d.profiles.find((p) => p.id === d.currentUserId)
+    if (autor?.role !== "admin" && autor?.role !== "treinador") return
+    if (!input.titulo.trim() || !input.data || !input.horario || !input.local.trim()) return
+    const treino: Treino = {
+      ...input,
+      id: nextId(),
+      grupoId: d.grupo.id,
+      qrToken: nextId(),
+      criadoPor: d.currentUserId,
+    }
+    const post: Publicacao = {
+      id: nextId(),
+      grupoId: d.grupo.id,
+      usuarioId: d.currentUserId,
+      texto: `Treino na agenda: ${treino.titulo} · ${treino.data.split("-").reverse().join("/")} · ${treino.horario.slice(0, 5)} · ${treino.local}`,
+      tipo: "texto",
+      createdAt: new Date().toISOString(),
+    }
+    setData((cur) => ({ ...cur, treinos: [treino, ...cur.treinos], publicacoes: [post, ...cur.publicacoes] }))
+    if (supabaseEnabled) {
+      void persistTreino(treino)
+      void persistPost(post)
+    }
   }, [])
 
   const createPost = useCallback((input: {
@@ -571,37 +678,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tipo: Publicacao["tipo"]
     distanciaKm?: number
   }) => {
-    setData((d) => {
-      if (!d.currentUserId) return d
-      const post: Publicacao = {
-        id: uid("p"),
-        grupoId: d.grupo.id,
-        usuarioId: d.currentUserId,
-        texto: input.texto,
-        midiaUrl: input.midiaUrl,
-        tipo: input.tipo,
-        distanciaKm: input.distanciaKm,
-        createdAt: new Date().toISOString(),
-      }
-      return { ...d, publicacoes: [post, ...d.publicacoes] }
-    })
+    const d = dataRef.current
+    if (!d.currentUserId) return
+    const texto = input.texto.trim()
+    if (!texto && !input.midiaUrl) return
+    if (texto.length > 4000) return
+    const post: Publicacao = {
+      id: nextId(),
+      grupoId: d.grupo.id,
+      usuarioId: d.currentUserId,
+      texto,
+      midiaUrl: input.midiaUrl,
+      tipo: input.tipo,
+      distanciaKm: input.distanciaKm,
+      createdAt: new Date().toISOString(),
+    }
+    setData((cur) => ({ ...cur, publicacoes: [post, ...cur.publicacoes] }))
+    if (supabaseEnabled) void persistPost(post)
   }, [])
 
   const deletePost = useCallback((id: string) => {
-    setData((d) => ({
-      ...d,
-      publicacoes: d.publicacoes.filter((p) => p.id !== id),
-      curtidas: d.curtidas.filter((c) => c.publicacaoId !== id),
-      comentarios: d.comentarios.filter((c) => c.publicacaoId !== id),
+    const d = dataRef.current
+    const post = d.publicacoes.find((p) => p.id === id)
+    if (!post || post.usuarioId !== d.currentUserId) return
+    setData((cur) => ({
+      ...cur,
+      publicacoes: cur.publicacoes.filter((p) => p.id !== id),
+      curtidas: cur.curtidas.filter((c) => c.publicacaoId !== id),
+      comentarios: cur.comentarios.filter((c) => c.publicacaoId !== id),
     }))
+    if (supabaseEnabled) void persistDeletePost(id)
   }, [])
 
   const toggleLike = useCallback((publicacaoId: string) => {
+    const userId = dataRef.current.currentUserId
+    if (!userId) return
+    const exists = dataRef.current.curtidas.some(
+      (c) => c.usuarioId === userId && c.publicacaoId === publicacaoId,
+    )
     setData((d) => {
       if (!d.currentUserId) return d
-      const exists = d.curtidas.some(
-        (c) => c.usuarioId === d.currentUserId && c.publicacaoId === publicacaoId,
-      )
       return {
         ...d,
         curtidas: exists
@@ -611,47 +727,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
           : [...d.curtidas, { usuarioId: d.currentUserId, publicacaoId }],
       }
     })
+    if (supabaseEnabled) void persistLike(userId, publicacaoId, !exists)
   }, [])
 
   const addComment = useCallback((publicacaoId: string, texto: string) => {
     const trimmed = texto.trim()
-    if (!trimmed) return
-    setData((d) => {
-      if (!d.currentUserId) return d
-      return {
-        ...d,
-        comentarios: [
-          ...d.comentarios,
-          {
-            id: uid("cm"),
-            usuarioId: d.currentUserId,
-            publicacaoId,
-            texto: trimmed,
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      }
-    })
+    if (!trimmed || trimmed.length > 2000) return
+    const d = dataRef.current
+    if (!d.currentUserId) return
+    const comment = {
+      id: nextId(),
+      usuarioId: d.currentUserId,
+      publicacaoId,
+      texto: trimmed,
+      createdAt: new Date().toISOString(),
+    }
+    setData((cur) => ({
+      ...cur,
+      comentarios: [...cur.comentarios, comment],
+    }))
+    if (supabaseEnabled) void persistComment(comment)
   }, [])
 
   const sendMessage = useCallback((paraId: string, texto: string) => {
     const trimmed = texto.trim()
-    if (!trimmed) return
-    setData((d) => {
-      if (!d.currentUserId || d.currentUserId === paraId) return d
-      const msg: Mensagem = {
-        id: uid("m"),
-        deId: d.currentUserId,
-        paraId,
-        texto: trimmed,
-        createdAt: new Date().toISOString(),
-        lida: false,
-      }
-      return { ...d, mensagens: [...d.mensagens, msg] }
-    })
+    if (!trimmed || trimmed.length > 2000) return
+    const d = dataRef.current
+    if (!d.currentUserId || d.currentUserId === paraId) return
+    const msg: Mensagem = {
+      id: nextId(),
+      deId: d.currentUserId,
+      paraId,
+      texto: trimmed,
+      createdAt: new Date().toISOString(),
+      lida: false,
+    }
+    setData((cur) => ({ ...cur, mensagens: [...cur.mensagens, msg] }))
+    if (supabaseEnabled) void persistMessage(msg)
   }, [])
 
   const markThreadRead = useCallback((otherId: string) => {
+    const userId = dataRef.current.currentUserId
+    if (!userId) return
     setData((d) => {
       if (!d.currentUserId) return d
       return {
@@ -661,6 +778,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
       }
     })
+    if (supabaseEnabled) void persistThreadRead(userId, otherId)
   }, [])
 
   const unreadCount = useMemo(() => {
@@ -669,6 +787,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [data.currentUserId, data.mensagens])
 
   const reactSugestao = useCallback((sugestaoId: string, tipo: ReacaoTipo) => {
+    const userId = dataRef.current.currentUserId
+    if (!userId) return
     setData((d) => {
       if (!d.currentUserId) return d
       const rest = d.reacoes.filter(
@@ -679,45 +799,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
         reacoes: [...rest, { usuarioId: d.currentUserId, sugestaoId, tipo }],
       }
     })
+    if (supabaseEnabled) void persistReacao(userId, sugestaoId, tipo)
   }, [])
 
   const addStory = useCallback((input: { midiaUrl: string; texto?: string }) => {
+    const d = dataRef.current
+    if (!d.currentUserId || !input.midiaUrl) return
     const now = Date.now()
-    setData((d) => {
-      if (!d.currentUserId) return d
-      const story: Story = {
-        id: uid("st"),
-        grupoId: d.grupo.id,
-        usuarioId: d.currentUserId,
-        midiaUrl: input.midiaUrl,
-        texto: input.texto,
-        createdAt: new Date(now).toISOString(),
-        expiresAt: new Date(now + 24 * 3600 * 1000).toISOString(),
-        viewedBy: [d.currentUserId],
-      }
-      return { ...d, stories: [story, ...d.stories] }
-    })
+    const story: Story = {
+      id: nextId(),
+      grupoId: d.grupo.id,
+      usuarioId: d.currentUserId,
+      midiaUrl: input.midiaUrl,
+      texto: input.texto,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + 24 * 3600 * 1000).toISOString(),
+      viewedBy: [d.currentUserId],
+    }
+    setData((cur) => ({ ...cur, stories: [story, ...cur.stories] }))
+    if (supabaseEnabled) void persistStory(story)
   }, [])
 
   const viewStory = useCallback((id: string) => {
-    setData((d) => {
-      if (!d.currentUserId) return d
-      return {
-        ...d,
-        stories: d.stories.map((s) =>
-          s.id === id && !s.viewedBy.includes(d.currentUserId!)
-            ? { ...s, viewedBy: [...s.viewedBy, d.currentUserId!] }
-            : s,
-        ),
-      }
-    })
+    const userId = dataRef.current.currentUserId
+    if (!userId) return
+    const story = dataRef.current.stories.find((s) => s.id === id)
+    if (!story || story.viewedBy.includes(userId)) return
+    setData((d) => ({
+      ...d,
+      stories: d.stories.map((s) =>
+        s.id === id ? { ...s, viewedBy: [...s.viewedBy, userId] } : s,
+      ),
+    }))
+    if (supabaseEnabled) void persistStoryView(id, userId)
   }, [])
 
   const deleteStory = useCallback((id: string) => {
+    const userId = dataRef.current.currentUserId
+    const story = dataRef.current.stories.find((s) => s.id === id)
+    if (!story || story.usuarioId !== userId) return
     setData((d) => ({
       ...d,
-      stories: d.stories.filter((s) => !(s.id === id && s.usuarioId === d.currentUserId)),
+      stories: d.stories.filter((s) => s.id !== id),
     }))
+    if (supabaseEnabled) void persistDeleteStory(id)
   }, [])
 
   const profileById = useCallback(
@@ -746,6 +871,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       data,
       me,
       isStaff,
+      authReady,
       ranking,
       login,
       logout,
@@ -778,6 +904,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       data,
       me,
       isStaff,
+      authReady,
       ranking,
       login,
       logout,

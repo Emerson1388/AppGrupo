@@ -81,8 +81,9 @@ export function TreinoDetalhe() {
           type="button"
           disabled={euCheckin}
           onClick={() => {
-            const err = checkin(treino.id)
-            setMsg(err ?? "Check-in feito. Presença registrada.")
+            void checkin(treino.id).then((err) => {
+              setMsg(err ?? "Check-in feito. Presença registrada.")
+            })
           }}
           className="rounded-2xl border border-line py-3 text-sm font-bold disabled:opacity-40"
         >
@@ -91,7 +92,7 @@ export function TreinoDetalhe() {
       </div>
       {!aberto && !euCheckin && (
         <p className="text-xs text-muted">
-          No dia do treino o check-in fica aberto. Fora do dia, abre 45 min antes e fecha 3h depois.
+          Check-in abre 45 min antes do treino e fecha 3h depois.
         </p>
       )}
       {msg && <p className="text-sm text-lime">{msg}</p>}

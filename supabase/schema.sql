@@ -74,6 +74,7 @@ create table if not exists public.publicacoes (
   texto text not null default '',
   midia_url text,
   tipo text not null default 'texto' check (tipo in ('foto', 'video', 'texto')),
+  distancia_km numeric(6, 2),
   created_at timestamptz not null default now()
 );
 
@@ -341,3 +342,5 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- Depois deste arquivo, execute supabase/sync.sql (RLS extra + RPC de check-in).

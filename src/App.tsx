@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom"
 import { AppProvider, useApp } from "./context/AppContext"
 import { ThemeProvider } from "./context/ThemeContext"
@@ -27,6 +28,18 @@ import { AuthCallback } from "./pages/AuthCallback"
 import { Privacidade } from "./pages/Privacidade"
 import { Termos } from "./pages/Termos"
 
+function SessionGate({ children }: { children: ReactNode }) {
+  const { authReady } = useApp()
+  if (!authReady) {
+    return (
+      <div className="flex min-h-svh items-center justify-center bg-bg px-6 text-sm text-muted">
+        Carregando sessão...
+      </div>
+    )
+  }
+  return children
+}
+
 function Guard() {
   const { me } = useApp()
   const location = useLocation()
@@ -39,6 +52,7 @@ export default function App() {
     <ThemeProvider>
       <AppProvider>
         <BrowserRouter>
+          <SessionGate>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
@@ -69,6 +83,7 @@ export default function App() {
             </Route>
           </Routes>
           <CookieNotice />
+          </SessionGate>
         </BrowserRouter>
       </AppProvider>
     </ThemeProvider>

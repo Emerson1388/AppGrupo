@@ -52,9 +52,15 @@ describe("kmLabel / nivelLabel / uid", () => {
 })
 
 describe("checkinAberto / treinoPassou", () => {
-  it("abre check-in no mesmo dia do treino", () => {
-    const t = makeTreino({ data: "2026-09-12", horario: "19:00" })
-    expect(checkinAberto(t, new Date("2026-09-12T10:00:00"))).toBe(true)
+  it("abre 45 min antes e fecha 3 h depois do horário do treino", () => {
+    const t = makeTreino({ data: "2026-09-12", horario: "09:00" })
+    expect(checkinAberto(t, new Date(2026, 8, 12, 8, 14))).toBe(false)
+    expect(checkinAberto(t, new Date(2026, 8, 12, 8, 15))).toBe(true)
+    expect(checkinAberto(t, new Date(2026, 8, 12, 8, 30))).toBe(true)
+    expect(checkinAberto(t, new Date(2026, 8, 12, 9, 0))).toBe(true)
+    expect(checkinAberto(t, new Date(2026, 8, 12, 11, 59))).toBe(true)
+    expect(checkinAberto(t, new Date(2026, 8, 12, 12, 0))).toBe(true)
+    expect(checkinAberto(t, new Date(2026, 8, 12, 12, 1))).toBe(false)
   })
 
   it("abre check-in 45 min antes e fecha 3 h depois quando o dia já mudou", () => {

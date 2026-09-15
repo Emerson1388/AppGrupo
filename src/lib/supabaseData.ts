@@ -43,10 +43,40 @@ export function authErrorMessage(raw: string) {
     return "Esse e-mail já está cadastrado."
   }
   if (m.includes("password")) return "Senha inválida. Use pelo menos 8 caracteres."
-  return raw
+  if (m.includes("failed to fetch") || m.includes("network") || m.includes("fetch")) {
+    return "Sem conexão com o servidor. Tente de novo."
+  }
+  if (m.includes("pgrst") || m.includes("jwt") || m.includes("session")) {
+    return "Sessão expirada. Entre de novo."
+  }
+  if (m.includes("authapi")) return "Não foi possível autenticar. Tente de novo."
+  return "Não foi possível concluir. Tente de novo."
 }
 
-function mapGrupo(row: GrupoRow): Grupo {
+export function cloudErrorMessage(raw: string) {
+  const m = raw.toLowerCase()
+  if (m.includes("fora da janela")) {
+    return "Check-in só abre 45 min antes e fecha 3h depois do treino."
+  }
+  if (m.includes("já registrada") || m.includes("ja registrada") || m.includes("duplicate") || m.includes("unique")) {
+    return "Presença já registrada neste treino."
+  }
+  if (m.includes("qr inválido") || m.includes("qr invalido")) {
+    return "QR Code inválido para este grupo."
+  }
+  if (m.includes("não encontrado") || m.includes("nao encontrado")) {
+    return "Treino não encontrado."
+  }
+  if (m.includes("row-level") || m.includes("violates") || m.includes("permission")) {
+    return "Você não tem permissão para esta ação."
+  }
+  if (m.includes("failed to fetch") || m.includes("network")) {
+    return "Sem conexão com o servidor. Tente de novo."
+  }
+  return "Não foi possível salvar. Tente de novo."
+}
+
+export function mapGrupo(row: GrupoRow): Grupo {
   return {
     id: row.id,
     nome: row.nome,
@@ -59,7 +89,7 @@ function mapGrupo(row: GrupoRow): Grupo {
   }
 }
 
-function mapProfile(row: ProfileRow, fallbackEmail: string): Profile {
+export function mapProfile(row: ProfileRow, fallbackEmail: string): Profile {
   const email = row.email || fallbackEmail
   return {
     id: row.id,
@@ -115,6 +145,7 @@ export async function hydrateFromSupabase(
   user: User,
   current: AppData,
 ): Promise<AppData | null> {
+  // Mantido para compatibilidade: o carregamento completo está em hydrateGroupData.
   if (!supabase) return null
   const me = await ensureProfile(user)
   if (!me) return null

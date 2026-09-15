@@ -25,8 +25,6 @@ export function treinoDateTime(treino: Treino) {
 }
 
 export function checkinAberto(treino: Treino, agora = new Date()) {
-  const hoje = format(agora, "yyyy-MM-dd")
-  if (treino.data === hoje) return true
   const inicio = treinoDateTime(treino)
   return isWithinInterval(agora, {
     start: addMinutes(inicio, -45),

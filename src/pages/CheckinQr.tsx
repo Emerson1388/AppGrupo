@@ -12,9 +12,10 @@ export function CheckinQr() {
   useEffect(() => {
     if (!token || ran.current) return
     ran.current = true
-    const err = checkinByToken(token)
-    const treino = data.treinos.find((t) => t.qrToken === token)
-    setMsg(err ?? `Presença confirmada${treino ? ` em ${treino.titulo}` : ""}.`)
+    void checkinByToken(token).then((err) => {
+      const treino = data.treinos.find((t) => t.qrToken === token)
+      setMsg(err ?? `Presença confirmada${treino ? ` em ${treino.titulo}` : ""}.`)
+    })
   }, [token, checkinByToken, data.treinos])
 
   return (
