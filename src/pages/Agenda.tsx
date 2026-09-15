@@ -94,6 +94,11 @@ export function Agenda() {
       {upcoming.map((treino) => (
         <TreinoCard key={treino.id} treino={treino} data={data} />
       ))}
+      {upcoming.length === 0 && (
+        <p className="rounded-3xl border border-line bg-card p-5 text-sm text-muted">
+          Nenhum treino na agenda. {isStaff ? "Crie o próximo treino para o grupo ver no celular." : "Quando o treinador publicar, aparece aqui."}
+        </p>
+      )}
 
       {past.length > 0 && (
         <p className="pt-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted">

@@ -3,6 +3,8 @@ import { Plus } from "lucide-react"
 import { useApp } from "../context/AppContext"
 import { StoryViewer } from "./StoryViewer"
 import type { Story } from "../types"
+import { supabaseEnabled } from "../lib/supabase"
+import { uploadDataUrl } from "../services/mediaService"
 
 function resizeStory(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -62,8 +64,13 @@ export function StoriesBar() {
 
   async function onAdd(file: File | undefined) {
     if (!file) return
-    const midiaUrl = await resizeStory(file)
-    addStory({ midiaUrl })
+    try {
+      const dataUrl = await resizeStory(file)
+      const midiaUrl = supabaseEnabled ? await uploadDataUrl("stories", dataUrl) : dataUrl
+      addStory({ midiaUrl })
+    } catch {
+      /* UI do story não tem banner; o Layout mostra cloudError se o persist falhar */
+    }
   }
 
   if (!me) return null

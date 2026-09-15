@@ -8,7 +8,7 @@ describe("Agenda", () => {
     renderApp(<Agenda />, { route: "/agenda" })
     expect(screen.getByRole("heading", { name: /próximos treinos/i })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: /próximas provas/i })).toBeInTheDocument()
-    expect(await screen.findByText(/circuito da longevidade/i)).toBeInTheDocument()
+    expect((await screen.findAllByRole("heading", { name: /circuito/i })).length).toBeGreaterThan(0)
     expect(screen.getByRole("heading", { name: /^regenerativo$/i })).toBeInTheDocument()
   })
 })

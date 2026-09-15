@@ -6,6 +6,8 @@ import { formatQuando } from "../lib/format"
 import { StoriesBar } from "../components/StoriesBar"
 import { SpotifyLink } from "../components/SpotifyLink"
 import { PhotoEditor } from "../components/PhotoEditor"
+import { supabaseEnabled } from "../lib/supabase"
+import { uploadDataUrl } from "../services/mediaService"
 import type { Checkin, Publicacao } from "../types"
 
 type Item =
@@ -22,6 +24,8 @@ export function Feed() {
   const [openComments, setOpenComments] = useState<string | null>(null)
   const [draft, setDraft] = useState("")
 
+  const [publishError, setPublishError] = useState<string | null>(null)
+
   const items = useMemo<Item[]>(() => {
     const posts: Item[] = data.publicacoes.map((post) => ({
       kind: "post",
@@ -36,13 +40,23 @@ export function Feed() {
     return [...posts, ...checkins].sort((a, b) => (a.at < b.at ? 1 : -1))
   }, [data.publicacoes, data.checkins])
 
-  function onPublish(e: FormEvent) {
+  async function onPublish(e: FormEvent) {
     e.preventDefault()
     if (!texto.trim() && !midiaUrl && !km) return
+    setPublishError(null)
+    let media = midiaUrl
+    try {
+      if (media && supabaseEnabled && media.startsWith("data:")) {
+        media = await uploadDataUrl("posts", media)
+      }
+    } catch {
+      setPublishError("Não deu para enviar a foto. Tente uma imagem menor.")
+      return
+    }
     createPost({
       texto: texto.trim() || (km ? `Treino de ${km} km.` : "Treino no feed."),
-      midiaUrl,
-      tipo: midiaUrl ? "foto" : "texto",
+      midiaUrl: media,
+      tipo: media ? "foto" : "texto",
       distanciaKm: km ? Number(km) : undefined,
     })
     setTexto("")
@@ -79,7 +93,7 @@ export function Feed() {
 
       <SpotifyLink />
 
-      <form onSubmit={onPublish} className="rounded-3xl border border-line bg-card p-4">
+      <form onSubmit={(e) => void onPublish(e)} className="rounded-3xl border border-line bg-card p-4">
         <div className="flex gap-3">
           <img src={me?.fotoUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
           <textarea
@@ -133,7 +147,7 @@ export function Feed() {
             value={km}
             onChange={(e) => setKm(e.target.value)}
             inputMode="decimal"
-            placeholder="km"
+            placeholder="km*"
             className="w-20 rounded-full border border-line bg-bg px-3 py-1.5 text-xs outline-none"
           />
           <button
@@ -143,6 +157,8 @@ export function Feed() {
             Publicar treino
           </button>
         </div>
+        {publishError && <p className="mt-2 text-xs text-ember">{publishError}</p>}
+        <p className="mt-2 text-[11px] text-muted">*Km no post é social. O ranking usa só check-in de treino.</p>
       </form>
 
       {editSrc && (
@@ -154,6 +170,12 @@ export function Feed() {
             setEditSrc(undefined)
           }}
         />
+      )}
+
+      {items.length === 0 && (
+        <p className="rounded-3xl border border-line bg-card px-4 py-6 text-sm text-muted">
+          Nenhuma publicação ainda. O que o grupo postar aparece em qualquer aparelho.
+        </p>
       )}
 
       {items.map((item) => {

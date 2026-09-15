@@ -1,5 +1,4 @@
 import { supabase } from "./supabase"
-import { initialData } from "../data/mock"
 import type {
   AppData,
   Checkin,
@@ -194,13 +193,20 @@ export async function hydrateGroupData(userId: string, email: string): Promise<A
     lida: Boolean(row.lida),
   }))
 
-  const grupo = grupoRes.data ? mapGrupo(grupoRes.data) : initialData.grupo
+  const grupo = grupoRes.data
+    ? mapGrupo(grupoRes.data)
+    : {
+        id: gid,
+        nome: "Grupo",
+        slug: "",
+        logoUrl: "/logo-plasts-run.png",
+        plano: "gratuito" as const,
+        limiteAtletas: 30,
+      }
   return {
     grupo: {
-      ...initialData.grupo,
       ...grupo,
-      logoUrl: grupo.logoUrl || initialData.grupo.logoUrl,
-      spotifyUrl: grupo.spotifyUrl || initialData.grupo.spotifyUrl,
+      logoUrl: grupo.logoUrl || "/logo-plasts-run.png",
     },
     profiles: profiles.length ? profiles : [me],
     treinos,
@@ -209,9 +215,9 @@ export async function hydrateGroupData(userId: string, email: string): Promise<A
     publicacoes,
     curtidas,
     comentarios,
-    sugestoes: sugestoes.length ? sugestoes : initialData.sugestoes,
+    sugestoes,
     reacoes,
-    conquistas: conquistas.length ? conquistas : initialData.conquistas,
+    conquistas,
     usuarioConquistas,
     mensagens,
     stories,
@@ -219,13 +225,18 @@ export async function hydrateGroupData(userId: string, email: string): Promise<A
   }
 }
 
+async function writeError(error: { message: string } | null) {
+  return { error: error ? cloudErrorMessage(error.message) : null }
+}
+
 export async function persistRsvp(usuarioId: string, treinoId: string, joining: boolean) {
-  if (!supabase) return
+  if (!supabase) return { error: null }
   if (joining) {
-    await supabase.from("participacoes").upsert({ usuario_id: usuarioId, treino_id: treinoId })
-    return
+    const { error } = await supabase.from("participacoes").upsert({ usuario_id: usuarioId, treino_id: treinoId })
+    return writeError(error)
   }
-  await supabase.from("participacoes").delete().eq("usuario_id", usuarioId).eq("treino_id", treinoId)
+  const { error } = await supabase.from("participacoes").delete().eq("usuario_id", usuarioId).eq("treino_id", treinoId)
+  return writeError(error)
 }
 
 function rpcMissing(message: string, code?: string) {
@@ -288,19 +299,20 @@ export async function persistCheckinByToken(token: string): Promise<{ error: str
 }
 
 export async function persistBadges(items: UsuarioConquista[]) {
-  if (!supabase || items.length === 0) return
-  await supabase.from("usuario_conquistas").upsert(
+  if (!supabase || items.length === 0) return { error: null }
+  const { error } = await supabase.from("usuario_conquistas").upsert(
     items.map((b) => ({
       usuario_id: b.usuarioId,
       conquista_id: b.conquistaId,
       unlocked_at: b.unlockedAt,
     })),
   )
+  return writeError(error)
 }
 
 export async function persistTreino(treino: Treino) {
-  if (!supabase) return
-  await supabase.from("treinos").insert({
+  if (!supabase) return { error: null }
+  const { error } = await supabase.from("treinos").insert({
     id: treino.id,
     grupo_id: treino.grupoId,
     titulo: treino.titulo,
@@ -316,11 +328,15 @@ export async function persistTreino(treino: Treino) {
     qr_token: treino.qrToken,
     criado_por: treino.criadoPor || null,
   })
+  return writeError(error)
 }
 
 export async function persistPost(post: Publicacao) {
-  if (!supabase) return
-  await supabase.from("publicacoes").insert({
+  if (post.midiaUrl?.startsWith("data:")) {
+    return { error: "A foto precisa ir para o armazenamento do grupo, não como arquivo embutido." }
+  }
+  if (!supabase) return { error: null }
+  const { error } = await supabase.from("publicacoes").insert({
     id: post.id,
     grupo_id: post.grupoId,
     usuario_id: post.usuarioId,
@@ -330,36 +346,40 @@ export async function persistPost(post: Publicacao) {
     distancia_km: post.distanciaKm ?? null,
     created_at: post.createdAt,
   })
+  return writeError(error)
 }
 
 export async function persistDeletePost(id: string) {
-  if (!supabase) return
-  await supabase.from("publicacoes").delete().eq("id", id)
+  if (!supabase) return { error: null }
+  const { error } = await supabase.from("publicacoes").delete().eq("id", id)
+  return writeError(error)
 }
 
 export async function persistLike(usuarioId: string, publicacaoId: string, liked: boolean) {
-  if (!supabase) return
+  if (!supabase) return { error: null }
   if (liked) {
-    await supabase.from("curtidas").upsert({ usuario_id: usuarioId, publicacao_id: publicacaoId })
-    return
+    const { error } = await supabase.from("curtidas").upsert({ usuario_id: usuarioId, publicacao_id: publicacaoId })
+    return writeError(error)
   }
-  await supabase.from("curtidas").delete().eq("usuario_id", usuarioId).eq("publicacao_id", publicacaoId)
+  const { error } = await supabase.from("curtidas").delete().eq("usuario_id", usuarioId).eq("publicacao_id", publicacaoId)
+  return writeError(error)
 }
 
 export async function persistComment(comment: Comentario) {
-  if (!supabase) return
-  await supabase.from("comentarios").insert({
+  if (!supabase) return { error: null }
+  const { error } = await supabase.from("comentarios").insert({
     id: comment.id,
     usuario_id: comment.usuarioId,
     publicacao_id: comment.publicacaoId,
     texto: comment.texto,
     created_at: comment.createdAt,
   })
+  return writeError(error)
 }
 
 export async function persistMessage(msg: Mensagem) {
-  if (!supabase) return
-  await supabase.from("mensagens").insert({
+  if (!supabase) return { error: null }
+  const { error } = await supabase.from("mensagens").insert({
     id: msg.id,
     de_id: msg.deId,
     para_id: msg.paraId,
@@ -367,25 +387,31 @@ export async function persistMessage(msg: Mensagem) {
     lida: msg.lida,
     created_at: msg.createdAt,
   })
+  return writeError(error)
 }
 
 export async function persistThreadRead(userId: string, otherId: string) {
-  if (!supabase) return
-  await supabase.from("mensagens").update({ lida: true }).eq("de_id", otherId).eq("para_id", userId)
+  if (!supabase) return { error: null }
+  const { error } = await supabase.from("mensagens").update({ lida: true }).eq("de_id", otherId).eq("para_id", userId)
+  return writeError(error)
 }
 
 export async function persistReacao(usuarioId: string, sugestaoId: string, tipo: ReacaoTipo) {
-  if (!supabase) return
-  await supabase.from("reacoes_sugestao").upsert({
+  if (!supabase) return { error: null }
+  const { error } = await supabase.from("reacoes_sugestao").upsert({
     usuario_id: usuarioId,
     sugestao_id: sugestaoId,
     tipo,
   })
+  return writeError(error)
 }
 
 export async function persistStory(story: Story) {
-  if (!supabase) return
-  await supabase.from("stories").insert({
+  if (story.midiaUrl.startsWith("data:")) {
+    return { error: "A foto precisa ir para o armazenamento do grupo, não como arquivo embutido." }
+  }
+  if (!supabase) return { error: null }
+  const { error } = await supabase.from("stories").insert({
     id: story.id,
     grupo_id: story.grupoId,
     usuario_id: story.usuarioId,
@@ -394,22 +420,37 @@ export async function persistStory(story: Story) {
     expires_at: story.expiresAt,
     created_at: story.createdAt,
   })
+  return writeError(error)
 }
 
 export async function persistStoryView(storyId: string, usuarioId: string) {
-  if (!supabase) return
-  await supabase.from("story_views").upsert({ story_id: storyId, usuario_id: usuarioId })
+  if (!supabase) return { error: null }
+  const { error } = await supabase.from("story_views").upsert({ story_id: storyId, usuario_id: usuarioId })
+  return writeError(error)
 }
 
 export async function persistDeleteStory(id: string) {
-  if (!supabase) return
-  await supabase.from("stories").delete().eq("id", id)
+  if (!supabase) return { error: null }
+  const { error } = await supabase.from("stories").delete().eq("id", id)
+  return writeError(error)
 }
 
-export async function persistDeleteAccount(userId: string) {
-  if (!supabase) return
-  await supabase.from("profiles").delete().eq("id", userId)
+export async function persistDeleteAccount() {
+  if (!supabase) return { error: null }
+  const rpc = await supabase.rpc("excluir_minha_conta")
+  if (rpc.error && !rpcMissing(rpc.error.message, rpc.error.code)) {
+    return writeError(rpc.error)
+  }
+  if (rpc.error) {
+    const { data: sessionWrap } = await supabase.auth.getUser()
+    const uid = sessionWrap.user?.id
+    if (uid) {
+      const { error } = await supabase.from("profiles").delete().eq("id", uid)
+      if (error) return writeError(error)
+    }
+  }
   await supabase.auth.signOut()
+  return { error: null }
 }
 
 export function newEntityId() {

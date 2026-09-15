@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
 import { Share2, Smartphone } from "lucide-react"
 import { isPhone, isStandalone, phoneUrl } from "../lib/pwa"
+import { invitePath } from "../lib/inviteSlug"
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
@@ -9,7 +10,7 @@ type BeforeInstallPromptEvent = Event & {
 }
 
 export function PhoneAccess({ compact = false }: { compact?: boolean }) {
-  const [url] = useState(() => phoneUrl("/g/plasts-run"))
+  const [url] = useState(() => phoneUrl(invitePath()))
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null)
   const [hint, setHint] = useState<string | null>(null)
   const phone = isPhone()
@@ -28,8 +29,8 @@ export function PhoneAccess({ compact = false }: { compact?: boolean }) {
     try {
       if (navigator.share) {
         await navigator.share({
-          title: "Plast's Run",
-          text: "Entre no grupo Plast's Run",
+          title: "Convite do grupo",
+          text: "Entre no grupo de corrida",
           url,
         })
         return

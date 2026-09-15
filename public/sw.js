@@ -1,11 +1,11 @@
 self.addEventListener("install", (event) => {
   self.skipWaiting()
-  event.waitUntil(caches.open("plasts-run-v2").then((cache) => cache.addAll(["/logo-plasts-run.png"])))
+  event.waitUntil(caches.open("appgrupo-v3").then((cache) => cache.addAll(["/logo-plasts-run.png"])))
 })
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== "plasts-run-v2").map((k) => caches.delete(k)))).then(() => self.clients.claim()),
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== "appgrupo-v3").map((k) => caches.delete(k)))).then(() => self.clients.claim()),
   )
 })
 

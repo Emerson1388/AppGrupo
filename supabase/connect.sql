@@ -57,12 +57,14 @@ set search_path = public
 as $$
 declare
   gid uuid;
-  n_admin int;
-  new_role text;
+  slug text;
 begin
-  select id into gid from public.grupos where slug = 'plasts-run' limit 1;
-  select count(*) into n_admin from public.profiles where grupo_id = gid and role = 'admin';
-  new_role := case when coalesce(n_admin, 0) = 0 then 'admin' else 'atleta' end;
+  slug := nullif(trim(both from coalesce(new.raw_user_meta_data->>'grupo_slug', '')), '');
+  if slug is not null then
+    select id into gid from public.grupos where grupos.slug = slug limit 1;
+  else
+    select id into gid from public.grupos where grupos.slug = 'plasts-run' limit 1;
+  end if;
   insert into public.profiles (id, grupo_id, nome, email, nivel, role, meta)
   values (
     new.id,
@@ -70,7 +72,7 @@ begin
     coalesce(new.raw_user_meta_data->>'nome', split_part(new.email, '@', 1)),
     new.email,
     coalesce(new.raw_user_meta_data->>'nivel', 'iniciante'),
-    new_role,
+    'atleta',
     'Começar e não parar'
   )
   on conflict (id) do nothing;

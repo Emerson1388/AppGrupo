@@ -10,7 +10,9 @@ import {
   type ReactNode,
 } from "react"
 import { initialData } from "../data/mock"
-import { checkinAberto, treinoPassou, uid } from "../lib/format"
+import { checkinAberto, uid } from "../lib/format"
+import { readInviteSlug } from "../lib/inviteSlug"
+import { computeMonthlyRanking } from "../services/rankingService"
 import {
   attachProfile,
   completePasswordReset,
@@ -88,6 +90,13 @@ type RankingRow = {
 function emptyCloudState(): AppData {
   return {
     ...initialData,
+    grupo: {
+      id: "",
+      nome: "",
+      slug: "",
+      plano: "gratuito",
+      limiteAtletas: 0,
+    },
     currentUserId: null,
     profiles: [],
     treinos: [],
@@ -96,6 +105,7 @@ function emptyCloudState(): AppData {
     publicacoes: [],
     curtidas: [],
     comentarios: [],
+    sugestoes: [],
     reacoes: [],
     usuarioConquistas: [],
     mensagens: [],
@@ -112,6 +122,7 @@ type AppContextValue = {
   me: Profile | null
   isStaff: boolean
   authReady: boolean
+  cloudError: string | null
   ranking: RankingRow[]
   login: (email: string, password: string) => Promise<string | null>
   logout: () => void
@@ -193,10 +204,6 @@ function loadState(): AppData {
   }
 }
 
-function monthKey(iso: string) {
-  return iso.slice(0, 7)
-}
-
 function unlockFor(data: AppData, usuarioId: string, now: string): AppData {
   const userCheckins = data.checkins.filter((c) => c.usuarioId === usuarioId)
   const km = userCheckins.reduce((acc, c) => {
@@ -227,6 +234,7 @@ function unlockFor(data: AppData, usuarioId: string, now: string): AppData {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(loadState)
   const [authReady, setAuthReady] = useState(!supabaseEnabled)
+  const [cloudError, setCloudError] = useState<string | null>(null)
   const dataRef = useRef(data)
   dataRef.current = data
 
@@ -247,7 +255,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const user = sessionData.user
       if (!user || user.id !== userId) return
       const next = await hydrateGroupData(user.id, user.email ?? "")
-      if (!cancel && next) setData(next)
+      if (cancel) return
+      if (next) {
+        setData(next)
+        setCloudError(null)
+      } else {
+        setCloudError("Não foi possível carregar os dados do grupo. Tente de novo.")
+      }
     }
     void client.auth.getSession().then(async ({ data: sessionWrap }) => {
       const user = sessionWrap.session?.user
@@ -264,9 +278,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
         void applyUser(session.user.id)
       }
     })
+    const refresh = () => {
+      if (document.visibilityState && document.visibilityState !== "visible") return
+      void client.auth.getSession().then(({ data: sessionWrap }) => {
+        const user = sessionWrap.session?.user
+        if (user) void applyUser(user.id)
+      })
+    }
+    document.addEventListener("visibilitychange", refresh)
+    window.addEventListener("focus", refresh)
     return () => {
       cancel = true
       sub.subscription.unsubscribe()
+      document.removeEventListener("visibilitychange", refresh)
+      window.removeEventListener("focus", refresh)
     }
   }, [])
 
@@ -277,43 +302,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const isStaff = me?.role === "admin" || me?.role === "treinador"
 
-  const ranking = useMemo(() => {
-    const now = new Date()
-    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-    const treinosMes = data.treinos.filter((t) => t.data.startsWith(month))
-    const passados = treinosMes.filter((t) => treinoPassou(t, now))
-
-    return data.profiles
-      .map((profile) => {
-        const checkins = data.checkins.filter(
-          (c) => c.usuarioId === profile.id && monthKey(c.dataHora) === month,
-        )
-        const km = checkins.reduce((acc, c) => {
-          const t = data.treinos.find((x) => x.id === c.treinoId)
-          return acc + (t?.distanciaKm ?? 0)
-        }, 0)
-        const rsvps = data.participacoes.filter((p) => {
-          if (p.usuarioId !== profile.id) return false
-          return passados.some((t) => t.id === p.treinoId)
-        }).length
-        const presentes = checkins.filter((c) => passados.some((t) => t.id === c.treinoId)).length
-        const postKm = data.publicacoes
-          .filter((p) => p.usuarioId === profile.id && monthKey(p.createdAt) === month)
-          .reduce((acc, p) => acc + (p.distanciaKm ?? 0), 0)
-        return {
-          profile,
-          km: km + postKm,
-          treinos: checkins.length,
-          rsvps,
-          presenca: rsvps === 0 ? 0 : Math.round((presentes / rsvps) * 100),
-        }
-      })
-      .sort((a, b) => b.km - a.km || b.treinos - a.treinos)
-  }, [data])
+  const ranking = useMemo(() => computeMonthlyRanking(data), [data])
 
   const login = useCallback(async (email: string, password: string) => {
     const mail = email.trim().toLowerCase()
-    const pass = password.trim()
+    const pass = password
     const redirect = `${window.location.origin}/auth/callback`
 
     const finishCloud = async (user: User) => {
@@ -340,31 +333,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return authErrorMessage(firstMsg)
       }
 
-      const local = await verifyLogin(mail, pass)
-      if (!local.error && "account" in local && local.account) {
-        await supabase.auth.signUp({
-          email: mail,
-          password: pass,
-          options: {
-            emailRedirectTo: redirect,
-            data: { nome: local.account.nome, nivel: local.account.nivel },
-          },
-        })
-        const again = await supabase.auth.signInWithPassword({ email: mail, password: pass })
-        const againUser = again.data.user
-        const againErr = again.error
-        const againMsg = againErr == null ? "" : againErr.message
-        if (!againMsg && againUser) return finishCloud(againUser)
-        if (againMsg.toLowerCase().includes("email not confirmed")) {
-          await supabase.auth.resend({
-            type: "signup",
-            email: mail,
-            options: { emailRedirectTo: redirect },
-          })
-          return "Conta gravada na nuvem. Confirme o e-mail e entre de novo no celular com a mesma senha."
-        }
-      }
-
       if (firstMsg) return authErrorMessage(firstMsg)
     }
     const result = await verifyLogin(mail, pass)
@@ -377,7 +345,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     if (supabaseEnabled && supabase) void supabase.auth.signOut()
-    setData((d) => ({ ...d, currentUserId: null }))
+    setData(supabaseEnabled ? emptyCloudState() : (d) => ({ ...d, currentUserId: null }))
   }, [])
 
   const signup = useCallback(async (input: {
@@ -400,14 +368,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (supabaseEnabled && supabase) {
       const mail = input.email.trim().toLowerCase()
-      const pass = input.password.trim()
+      const pass = input.password
       const redirect = `${window.location.origin}/auth/callback`
       const { data: created, error } = await supabase.auth.signUp({
         email: mail,
         password: pass,
         options: {
           emailRedirectTo: redirect,
-          data: { nome: input.nome.trim(), nivel: input.nivel },
+          data: {
+            nome: input.nome.trim(),
+            nivel: input.nivel,
+            grupo_slug: readInviteSlug() ?? undefined,
+          },
         },
       })
       if (error) return { error: authErrorMessage(error.message) }
@@ -474,9 +446,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const requestPasswordReset = useCallback(async (email: string) => {
     if (supabaseEnabled && supabase) {
-      await supabase.auth.resetPasswordForEmail(email.trim(), {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
         redirectTo: `${window.location.origin}/redefinir-senha`,
       })
+      if (error) return { token: null }
+      return { token: null }
     }
     const { token } = startPasswordReset(email)
     return { token }
@@ -498,7 +472,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!me) return
     const id = me.id
     deleteAccountByEmail(me.email)
-    if (supabaseEnabled) void persistDeleteAccount(id)
+    if (supabaseEnabled) void persistDeleteAccount()
     setData((d) => ({
       ...d,
       currentUserId: null,
@@ -515,11 +489,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [me])
 
   const updateMe = useCallback((patch: Partial<Profile>) => {
+    const safe = { ...patch }
+    delete safe.role
+    delete safe.grupoId
     setData((d) => ({
       ...d,
-      profiles: d.profiles.map((p) => (p.id === d.currentUserId ? { ...p, ...patch } : p)),
+      profiles: d.profiles.map((p) => (p.id === d.currentUserId ? { ...p, ...safe } : p)),
     }))
-    if (data.currentUserId && supabaseEnabled) void saveProfilePatch(data.currentUserId, patch)
+    if (data.currentUserId && supabaseEnabled) {
+      void saveProfilePatch(data.currentUserId, safe).then((res) => {
+        if (res?.error) setCloudError(res.error)
+      })
+    }
   }, [data.currentUserId])
 
   const rsvp = useCallback((treinoId: string) => {
@@ -550,7 +531,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ],
       }
     })
-    if (supabaseEnabled) void persistRsvp(userId, treinoId, !exists)
+    if (supabaseEnabled) {
+      void persistRsvp(userId, treinoId, !exists).then((res) => {
+        if (res?.error) setCloudError(res.error)
+      })
+    }
   }, [])
 
   const applyCheckin = useCallback((
@@ -595,7 +580,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         unlocked.usuarioConquistas.filter(
           (x) => x.usuarioId === prev.currentUserId && !before.has(x.conquistaId),
         ),
-      )
+      ).then((res) => {
+        if (res?.error) setCloudError(res.error)
+      })
     }
   }, [])
 
@@ -667,8 +654,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     setData((cur) => ({ ...cur, treinos: [treino, ...cur.treinos], publicacoes: [post, ...cur.publicacoes] }))
     if (supabaseEnabled) {
-      void persistTreino(treino)
-      void persistPost(post)
+      void persistTreino(treino).then((res) => {
+        if (res?.error) setCloudError(res.error)
+      })
+      void persistPost(post).then((res) => {
+        if (res?.error) setCloudError(res.error)
+      })
     }
   }, [])
 
@@ -694,7 +685,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
     }
     setData((cur) => ({ ...cur, publicacoes: [post, ...cur.publicacoes] }))
-    if (supabaseEnabled) void persistPost(post)
+    if (supabaseEnabled) {
+      void persistPost(post).then((res) => {
+        if (res?.error) setCloudError(res.error)
+      })
+    }
   }, [])
 
   const deletePost = useCallback((id: string) => {
@@ -727,7 +722,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           : [...d.curtidas, { usuarioId: d.currentUserId, publicacaoId }],
       }
     })
-    if (supabaseEnabled) void persistLike(userId, publicacaoId, !exists)
+    if (supabaseEnabled) {
+      void persistLike(userId, publicacaoId, !exists).then((res) => {
+        if (res?.error) setCloudError(res.error)
+      })
+    }
   }, [])
 
   const addComment = useCallback((publicacaoId: string, texto: string) => {
@@ -746,7 +745,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...cur,
       comentarios: [...cur.comentarios, comment],
     }))
-    if (supabaseEnabled) void persistComment(comment)
+    if (supabaseEnabled) {
+      void persistComment(comment).then((res) => {
+        if (res?.error) setCloudError(res.error)
+      })
+    }
   }, [])
 
   const sendMessage = useCallback((paraId: string, texto: string) => {
@@ -817,7 +820,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       viewedBy: [d.currentUserId],
     }
     setData((cur) => ({ ...cur, stories: [story, ...cur.stories] }))
-    if (supabaseEnabled) void persistStory(story)
+    if (supabaseEnabled) {
+      void persistStory(story).then((res) => {
+        if (res?.error) setCloudError(res.error)
+      })
+    }
   }, [])
 
   const viewStory = useCallback((id: string) => {
@@ -872,6 +879,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       me,
       isStaff,
       authReady,
+      cloudError,
       ranking,
       login,
       logout,
@@ -905,6 +913,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       me,
       isStaff,
       authReady,
+      cloudError,
       ranking,
       login,
       logout,

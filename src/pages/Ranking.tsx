@@ -47,6 +47,11 @@ export function Ranking() {
       </div>
 
       <ol className="space-y-2">
+        {sorted.length === 0 && (
+          <p className="rounded-2xl border border-line bg-card px-3 py-4 text-sm text-muted">
+            Ainda não há check-ins neste mês.
+          </p>
+        )}
         {sorted.map((row, i) => (
           <li key={row.profile.id}>
             <Link

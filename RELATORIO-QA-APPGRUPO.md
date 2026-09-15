@@ -1,308 +1,148 @@
-# Relatório QA — AppGrupo
+# Relatório QA — AppGrupo (rodada 2.0)
 
-Data: 13/09/2026
+Data: 14/09/2026
 
 ## 1. Resumo executivo
 
-O AppGrupo era um MVP em que **a fonte de verdade era o `localStorage` do navegador**. Por isso, uma conta criada no notebook não existia no celular: cada aparelho tinha o seu próprio banco.
+O AppGrupo deixou de tratar o navegador como banco. Com Supabase configurado:
 
-A autenticação já tentava o Supabase Auth, mas a hidratação só trazia **grupo + perfis**. Treinos, RSVP, check-ins, feed, curtidas, comentários, mensagens, stories e conquistas continuavam locais. IDs no formato `t_xxxxxxxx` também não cabiam nas colunas UUID do Postgres.
+- cadastro/login/logout e sessão vêm do **Supabase Auth**;
+- senha **não** é alterada com `trim()`;
+- o grupo do convite `/g/:slug` é resolvido dinamicamente;
+- novos usuários entram como **atleta** (admin só via SQL);
+- treinos, RSVP, check-in, feed, likes, comentários, mensagens e stories gravam no Postgres;
+- ranking mensal usa **somente check-in de treino**;
+- fotos vão para o bucket `midia` quando o Storage estiver criado.
 
-Esta rodada liga o frontend ao Postgres quando `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` existem:
+Backup Git: `5c32260` (`backup antes das correcoes AppGrupo`).
 
-- cadastro / login / logout / sessão via **Supabase Auth**;
-- perfil separado do usuário Auth;
-- entidades do grupo persistidas e recarregadas do banco;
-- check-in na janela real (45 min antes → 3 h depois), com RPC no servidor;
-- RLS mais restrito (script SQL para aplicar no projeto);
-- F5 não manda o usuário logado de volta ao convite antes da sessão hidratar.
+**Você precisa rodar no SQL Editor, nesta ordem:**
 
-**Ação obrigatória no Supabase (você precisa executar):** cole `supabase/sync.sql` no SQL Editor. Sem isso, o app tenta gravar, mas policies e a coluna `distancia_km` podem faltar. Se o login no celular falhar com “e-mail não confirmado”, rode também `supabase/liberar-login.sql`.
+1. `supabase/schema.sql` (se o projeto for novo)
+2. `supabase/sync.sql`
+3. `supabase/migrations/20260914_hardening.sql`
+4. Opcional: `supabase/liberar-login.sql`
+5. `select public.promover_admin('seu@email');` para o treinador
 
-Build, TypeScript e 52 testes unitários passaram nesta máquina. Os testes **A–E entre notebook e celular** ainda precisam ser feitos manualmente depois do SQL e do deploy.
-
-## 2. Arquitetura atual
+## 2. Arquitetura
 
 ```text
-React + Vite (Vercel)
-        ↓
-Supabase Auth (sessão do SDK)
-        ↓
-PostgreSQL + RLS
-        ↓
-grupos → profiles → treinos / publicacoes / mensagens / stories
-              ↓
-         participacoes, checkins, curtidas, comentarios
+React + Vite
+    → AppContext (UI / sessão)
+    → services + supabaseSync
+    → Supabase Auth / Postgres / Storage
+    → RLS
 ```
 
-Camadas:
-
-| Camada | Onde |
-| --- | --- |
-| Telas | `src/pages/*`, `src/components/*` |
-| Estado | `src/context/AppContext.tsx` |
-| Auth / perfil | `src/lib/supabase.ts`, `src/lib/supabaseData.ts` |
-| Sync | `src/lib/supabaseSync.ts` |
-| Schema | `supabase/schema.sql` + `supabase/sync.sql` |
-| Fallback local | `src/lib/accounts.ts` + `runclub.v2` **somente se o Supabase não estiver configurado** |
-
-Classificação de storage:
-
-| Chave | Classe | Destino |
-| --- | --- | --- |
-| `runclub.theme` | A — pode ficar local | preferência visual |
-| aviso de cookies | A | preferência |
-| sessão Supabase (SDK) | A | gerenciada pelo Auth |
-| `runclub.v2` | B | **não é mais escrito** com Supabase ligado |
-| `runclub.accounts.v2` | B | só no modo demo sem nuvem |
-
-Não há `sessionStorage` nem IndexedDB no código da aplicação.
+`localStorage` permanece só para tema e cookies. Contas locais (`accounts.ts`) só no modo demo, sem env do Supabase.
 
 ## 3. Problemas encontrados
 
-### P0 — crítico
+### P0
+- Senha com `password.trim()`
+- Login local ainda tentava gravar conta na nuvem
+- Primeiro usuário virava admin (corrida)
+- Slug `plasts-run` hardcoded no cadastro/guard
+- Ranking somava km digitado no post
+- Persist sem checar `error`
+- Hidratação misturava mock
+- Convite anônimo não lia o grupo no banco
 
-- Login/cadastro no notebook não existiam no celular (`localStorage`).
-- Hidratação incompleta: só grupo e perfis iam ao banco.
-- IDs `uid("t")` incompatíveis com UUID.
-- `runclub.v2` continuava sendo a persistência mesmo com Auth na nuvem.
-- RLS frouxo: `reacoes_sugestao` com `using (true)`; `participacoes`/`checkins`/`curtidas`/`comentarios` com `for all`; `story_views` sem policy; `usuario_conquistas` sem INSERT.
-- Confirmação de e-mail do Supabase bloqueia o segundo aparelho se `liberar-login.sql` não tiver sido rodado.
-- F5 em rota privada podia redirecionar ao convite antes de `getSession()`.
+### P1
+- Foto/story em data URL
+- Exclusão de conta = só signOut
+- Reset de senha local + nuvem ao mesmo tempo
+- Sem empty states
+- Admin automático no `ensureProfile`
 
-### P1 — alto
+### P2
+- Sem pasta `docs/`
+- PWA cache antigo
+- Overflow em telas estreitas
 
-- Check-in aberto o dia inteiro se a data fosse “hoje”.
-- Feed/agenda/ranking dependiam de dados locais.
-- QR validado só no cliente.
-- Foto de perfil e mídia de post ainda como data URL (não Storage).
+## 4. Problemas corrigidos
 
-### P2 — médio
+Ver tabela da seção 16 (casos) e a tabela abaixo.
 
-- Sem UI de editar/excluir treino (policies de staff já no SQL).
-- Uploads sem bucket `midia` nem limite de MIME no Storage.
-- Lint de Fast Refresh / `setState` em effects (não bloqueia).
-- Sem Playwright E2E.
+## 5. Problemas pendentes
 
-### P3 — baixo
+- SQL/Storage/redirects no **painel** (instruções em `docs/CONFIGURACAO-MANUAL.md`)
+- Teste notebook ↔ celular em aparelhos reais (`docs/TESTE-MULTIDISPOSITIVO.md`)
+- `auth.users` não some no delete (só o perfil)
+- Playwright E2E de dois dispositivos reais (não simular com o mesmo localStorage)
 
-- Bundle JS ~617 kB.
-- Avisos de impureza (`Date.now` em stories).
 
-## 4. Bugs corrigidos
+## 6. Segurança
 
-- Sessão e perfil passam a vir do Auth + `profiles`.
-- Hidratação completa do grupo no login e no `onAuthStateChange`.
-- Mutações de RSVP, check-in, treino, post, like, comentário, mensagem, reação, story e badges gravam no Postgres.
-- IDs novos na nuvem usam `crypto.randomUUID()`.
-- `authReady` + `SessionGate` evitam o flash de deslogado no F5.
-- Janela de check-in alinhada à regra 45 min / 3 h.
-- RPC `fazer_checkin` / `fazer_checkin_por_token` valida janela, grupo e duplicata no banco.
-- Mensagens de erro de Auth/API deixam de vazar `PGRST` / `AuthApiError` para o usuário.
-- Exclusão de post/story só do próprio autor, também no cliente.
+Service role fora do frontend. Role/grupo_id protegidos no cliente e no trigger. Policies separadas (SELECT/INSERT/UPDATE/DELETE). SELECT público em `grupos` é só convite (nome/logo).
 
-## 5. Bugs pendentes
+## 7. RLS
 
-- SQL `sync.sql` ainda não aplicado no projeto remoto (depende de você).
-- Confirmação de e-mail pode continuar bloqueando o celular.
-- Fotos grandes em data URL podem falhar ou deixar o banco pesado.
-- Sem Storage (`midia`) nem políticas de bucket.
-- Sem edição/exclusão de treino na interface.
-- Testes multidispositivo A–E não executados daqui.
-- Sem suíte Playwright.
+Atualizado em `sync.sql` + `20260914_hardening.sql`. Sem desligar RLS.
 
-## 6. Severidade de cada bug
+## 8. Autenticação
 
-Ver tabela da seção 7.
+`signUp` / `signInWithPassword` / `signOut` / `getSession` / `getUser` / `onAuthStateChange`. Reset oficial (`resetPasswordForEmail` + `updateUser`). Sem `trim` na senha.
 
-## 7. Alterações realizadas
+## 9. Banco de dados
 
-| ID | Problema | Severidade | Status | Arquivo | Correção |
+Mesmas tabelas. Novos: RPC `excluir_minha_conta`, `promover_admin`, `handle_new_user` sempre atleta + `grupo_slug`.
+
+## 10. Storage
+
+Bucket `midia` com pastas `avatars/`, `posts/`, `stories/`. MIME e tamanho validados no cliente. Policies por pasta do `auth.uid()`.
+
+## 11. Mobile
+
+`overflow-x-hidden` no layout/convite. QR usa o slug do convite. Service worker `appgrupo-v3` (não fica preso no cache v2).
+
+## 12. Vercel
+
+Sem mudança estrutural. Variáveis `VITE_*` como Config. Nunca service role.
+
+## 13. Testes
+
+Executar `npm test`, `npm run build`, `npm run lint` nesta rodada.
+
+## 14. Casos de teste
+
+Manuais A–E (e 1–7 do prompt) depois do SQL. Unidade: janela de check-in, ranking sem post-km, slug, MIME, login/agenda/convite.
+
+## 15. Riscos
+
+1. Sem `hardening.sql`, Storage e convite público falham.
+2. Sem `promover_admin`, ninguém cria treino.
+3. Timezone do RPC: `America/Sao_Paulo`.
+4. Delete não remove o usuário Auth.
+5. Contas só locais antigas não entram na nuvem sozinhas — cadastro/login oficiais.
+
+## 16. Melhorias futuras
+
+Playwright, segundo grupo real, confirmação de e-mail oficial, Edge Function para apagar `auth.users`, compactar bundle.
+
+| ID | Problema | Severidade | Status | Arquivo | Solução |
 | --- | --- | --- | --- | --- | --- |
-| P0-01 | Conta só no aparelho | P0 | Corrigido no código | `AppContext.tsx`, `supabase.ts` | Auth + sessão do SDK; sem gravar `runclub.v2` na nuvem |
-| P0-02 | Hidratação incompleta | P0 | Corrigido no código | `supabaseSync.ts` | `hydrateGroupData` carrega todas as entidades do grupo |
-| P0-03 | IDs locais no UUID | P0 | Corrigido | `supabaseSync.ts`, `AppContext.tsx` | `newEntityId()` |
-| P0-04 | RLS aberto / incompleto | P0 | SQL pronto | `supabase/sync.sql` | Policies restritas + trigger de perfil |
-| P0-05 | F5 perde sessão na UI | P0 | Corrigido | `App.tsx`, `AppContext.tsx` | `authReady` + SessionGate |
-| P0-06 | E-mail não confirmado | P0 | Pendente (config) | `supabase/liberar-login.sql` | Rodar no SQL Editor se quiser login imediato |
-| P1-01 | Check-in o dia todo | P1 | Corrigido | `format.ts` | Só a janela 45 min / 3 h |
-| P1-02 | Check-in só no cliente | P1 | Corrigido no código | `sync.sql`, `supabaseSync.ts` | RPC no Postgres |
-| P1-03 | Feed/agenda/ranking locais | P1 | Corrigido no código | `AppContext.tsx` | Persist + hydrate |
-| P1-04 | Post/foto de outro usuário | P1 | Corrigido | `AppContext.tsx`, RLS | Delete só do autor |
-| P1-05 | Coluna km do post | P1 | SQL pronto | `schema.sql`, `sync.sql` | `publicacoes.distancia_km` |
-| P2-01 | Storage de mídia | P2 | Pendente | — | Criar bucket `midia` no painel |
-| P2-02 | Editar/apagar treino na UI | P2 | Pendente | — | Policies já previstas |
-| P2-03 | E2E Playwright | P2 | Pendente | — | Vitest cobre unidade/componente |
-| P3-01 | Lint Fast Refresh | P3 | Aceito | vários | Sem impacto funcional |
+| P0-01 | Senha com trim | P0 | Corrigido | `AppContext.tsx` | `const pass = password` |
+| P0-02 | Auth local na nuvem | P0 | Corrigido | `AppContext.tsx` | Login/cadastro/reset só Auth se env existir |
+| P0-03 | Admin automático | P0 | Corrigido | `schema.sql`, migration | Sempre atleta + `promover_admin` |
+| P0-04 | Grupo fixo | P0 | Corrigido | `inviteSlug.ts`, `Convite.tsx` | `/g/:slug` + metadata |
+| P0-05 | Ranking por post | P0 | Corrigido | `rankingService.ts` | Só check-in |
+| P0-06 | Persist ignora error | P0 | Corrigido | `supabaseSync.ts` | Retorna erro amigável |
+| P1-01 | Data URL | P1 | Corrigido no código | `mediaService.ts` | Upload Storage |
+| P1-02 | Delete = logout | P1 | Corrigido no código | RPC `excluir_minha_conta` | Apaga perfil e cascata |
+| P1-03 | Mock na nuvem | P1 | Corrigido | `supabaseSync.ts` | Sem fallback de mock |
+| P2-01 | PWA cache | P2 | Corrigido | `public/sw.js` | `appgrupo-v3` |
 
-## 8. Banco de dados
-
-Tabelas já existentes (não recriadas):
-
-`grupos`, `profiles`, `treinos`, `participacoes`, `checkins`, `publicacoes`, `curtidas`, `comentarios`, `sugestoes_treino`, `reacoes_sugestao`, `conquistas`, `usuario_conquistas`, `mensagens`, `stories`, `story_views`.
-
-Relacionamentos:
+### Critério de aceite (código vs. produção)
 
 ```text
-auth.users 1—1 profiles → grupos
-treinos 1—N participacoes / checkins  (único user+treino)
-publicacoes 1—N curtidas / comentarios  (único user+post nas curtidas)
-```
-
-Inclusão: `publicacoes.distancia_km`.
-
-Constraint de check-in duplicado: `unique (usuario_id, treino_id)` já existia.
-
-## 9. RLS e segurança
-
-RLS permanece **ligado**. `sync.sql` não desabilita políticas para “fazer funcionar”.
-
-Regras aplicadas no script:
-
-- perfil: ver colegas do grupo; editar/apagar só o próprio; role/grupo_id protegidos por trigger;
-- posts: insert no próprio grupo; delete só do autor;
-- comentários/curtidas: insert/delete só `auth.uid()`;
-- treinos: criar/editar/apagar só admin/treinador;
-- participações/check-ins: insert só da própria presença;
-- reações: deixam de ser `using (true)`;
-- mensagens: ler conversa própria; enviar como remetente; marcar lida só o destinatário;
-- `story_views`: select do grupo + insert da própria view;
-- badges: insert só do próprio usuário;
-- RPC de check-in: `security definer` + `auth.uid()` + `meu_grupo_id()`.
-
-O frontend **não** contém `SUPABASE_SERVICE_ROLE_KEY`. Só a anon/publishable key.
-
-## 10. Autenticação
-
-| Ação | API |
-| --- | --- |
-| Cadastro | `supabase.auth.signUp()` |
-| Login | `supabase.auth.signInWithPassword()` |
-| Logout | `supabase.auth.signOut()` |
-| Sessão | `getSession()`, `getUser()`, `onAuthStateChange()` |
-
-Senha, token e usuário completo **não** são gravados manualmente no `localStorage`.
-
-O modo local (`accounts.ts` + PBKDF2) só existe se as env vars do Supabase estiverem vazias, ou para migrar uma conta antiga no primeiro login na nuvem.
-
-Rotas públicas: `/login`, `/cadastro`, `/verificar-email`, `/confirmar-email`, `/esqueci-senha`, `/redefinir-senha`, `/auth/callback`, `/privacidade`, `/termos`, `/g/:slug`.
-
-Rotas privadas (Guard): `/`, `/agenda`, `/corridas`, `/ranking`, `/perfil`, `/feed` implícito em `/`, mensagens, membros, novo treino, check-in QR.
-
-Logado em `/login` ou `/cadastro` → redireciona para o app.
-
-## 11. Responsividade
-
-O layout (Tailwind, `min-h-svh`, cards, grid 2 colunas no detalhe do treino) não foi redesenhado. Não houve auditoria visual completa em 320–1440 px nesta rodada. Prioridade foi funcionamento e persistência. Vale testar no Android/iPhone depois do deploy, sobretudo QR, teclado e o botão de check-in.
-
-## 12. Testes realizados
-
-```text
-npm test   → 52 passed (10 arquivos)
-npm run build → tsc -b + vite build OK
-npm run lint → sem erro; só warnings
-```
-
-Cobertura automática: senha, formatação, janela de check-in (08:14 bloqueado … 12:01 bloqueado), contas locais, mensagens de erro, API de corridas, PWA, Login, Convite, Agenda, UUID de entidade.
-
-Os testes unitários **desligam** o Supabase (`vite.config.ts` `test.env`) para não depender da nuvem e para o modo demo local continuar testável.
-
-## 13. Testes que ainda precisam ser executados manualmente
-
-Depois de rodar `sync.sql` (e o deploy na Vercel):
-
-**Teste A** — notebook: cadastro → logout.
-
-**Teste B** — celular: login com o mesmo e-mail/senha → deve entrar.
-
-**Teste C** — celular altera perfil → notebook vê o perfil atualizado.
-
-**Teste D** — celular cria post → notebook abre o feed e vê o post.
-
-**Teste E** — notebook confirma treino → celular vê a presença na agenda.
-
-Também: F5 em `/agenda`, `/perfil`, `/ranking`, `/`; QR válido/inválido/fora da janela; check-in 08:15 vs 12:01; tentar apagar post de outra pessoa.
-
-## 14. Variáveis de ambiente necessárias
-
-No frontend / Vercel (tipo **Config**, não Secret):
-
-```text
-VITE_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY
-VITE_PUBLIC_APP_URL   (opcional; link do QR no celular)
-```
-
-**Nunca** coloque `SUPABASE_SERVICE_ROLE_KEY` na Vercel do frontend.
-
-Não alterei o arquivo `.env` real.
-
-## 15. Deploy
-
-- `vercel.json`: Vite, rewrite SPA, `api/corridas.ts` com `maxDuration` 30.
-- Node `24.x` no `package.json`.
-- Após o push: conferir as três `VITE_*` no projeto Vercel.
-- No Supabase → Authentication → URL Configuration:
-  - Site URL = domínio de produção
-  - Redirects: `http://localhost:5173/auth/callback` e `https://SEU-DOMINIO/auth/callback`
-  - Reset de senha: `/redefinir-senha`
-
-## 16. Riscos conhecidos
-
-1. Se `sync.sql` não for executado, inserts podem falhar (coluna/policy/RPC). O app cai no fallback de insert direto quando a função ainda não existe, mas o RLS antigo pode recusar ou ficar permissivo demais.
-2. Foto/vídeo em data URL estoura limite de linha ou payload.
-3. Timezone do check-in no banco é `America/Sao_Paulo`; o cliente usa o relógio do aparelho. Em outro fuso a janela pode divergir por minutos.
-4. Primeiro usuário do grupo vira admin (`handle_new_user`). Os seguintes são atletas.
-5. Contas criadas só no `localStorage` antigo não existem na nuvem até um login de migração (signUp + senha local) ou um cadastro novo.
-6. Isolamento multi-grupo depende de `grupo_id` + `meu_grupo_id()`. Hoje o cadastro entra no slug `plasts-run`.
-
-## 17. Recomendações futuras
-
-1. Bucket Storage `midia` (imagem/vídeo, tamanho e MIME) e gravar URL em vez de data URL.
-2. Playwright no fluxo Cadastro → Login → Agenda → Check-in → Feed → Ranking → Logout.
-3. Telas de editar/excluir treino para staff.
-4. Observabilidade: falhas de persist não podem ficar só no console.
-5. Segundo grupo real para validar isolamento A/B.
-6. Confirmação de e-mail oficial (em vez do auto-confirm) quando o clube estiver estável.
-7. Compactar o bundle e revisar stories/QR em 320 px.
-
----
-
-## Critério de aceite (estado agora)
-
-### Autenticação
-
-```text
-[x] Cadastro usa signUp (código)
-[x] Login usa signInWithPassword (código)
-[x] Logout usa signOut (código)
-[x] Sessão persiste via SDK (código)
-[ ] Notebook → celular  (manual + SQL)
-[ ] Celular → notebook  (manual + SQL)
-```
-
-### Dados
-
-```text
-[x] Perfil / treinos / check-ins / feed / curtidas / comentários / ranking
-    passam pelo service → Supabase (código)
-[ ] Confirmação visual no segundo aparelho (manual)
-```
-
-### Segurança
-
-```text
-[x] Script com RLS ativo e policies restritas
-[ ] Script aplicado no projeto Supabase
-[x] Service role fora do frontend
-```
-
-### Qualidade
-
-```text
-[x] Build
-[x] TypeScript
-[x] Lint sem erro crítico
-[x] 52 testes
-[ ] QA manual multidispositivo
+[x] cadastro/login/logout/sessão no código
+[ ] notebook ↔ celular (manual)
+[x] dados passam por service → Supabase
+[x] ranking sem post social
+[x] RLS script pronto
+[ ] RLS aplicado no projeto
+[x] Storage script + upload no código
+[ ] bucket criado no painel/SQL
+[x] build/lint/testes unitários
 ```

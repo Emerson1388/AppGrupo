@@ -27,11 +27,11 @@ const nav = [
 ]
 
 export function Layout() {
-  const { me, data, logout, isStaff, unreadCount } = useApp()
+  const { me, data, logout, isStaff, unreadCount, cloudError } = useApp()
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-svh bg-bg text-ink">
+    <div className="min-h-svh overflow-x-hidden bg-bg text-ink">
       <div className="mx-auto flex min-h-svh max-w-6xl">
         <aside className="sticky top-0 hidden h-svh w-60 shrink-0 flex-col border-r border-line px-4 py-6 md:flex">
           <div className="px-1">
@@ -152,6 +152,7 @@ export function Layout() {
               <button
                 type="button"
                 onClick={() => navigate("/perfil")}
+                aria-label="Abrir perfil"
                 className="flex items-center gap-2"
               >
                 <img
@@ -165,6 +166,11 @@ export function Layout() {
 
           <main className="flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10">
             <div className="mx-auto max-w-2xl">
+              {cloudError && (
+                <p className="mb-4 rounded-2xl border border-ember/40 bg-card px-3 py-2 text-sm text-ember">
+                  {cloudError}
+                </p>
+              )}
               <Outlet />
             </div>
           </main>

@@ -17,6 +17,11 @@ export function AuthCallback() {
         setMsg("Não foi possível confirmar o e-mail. Tente entrar de novo.")
         return
       }
+      const hash = window.location.hash
+      if (hash.includes("type=recovery")) {
+        navigate("/redefinir-senha", { replace: true })
+        return
+      }
       setMsg("E-mail confirmado. Entrando…")
       navigate("/", { replace: true })
     })

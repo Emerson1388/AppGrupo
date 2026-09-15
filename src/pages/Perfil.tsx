@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { Camera, LogOut } from "lucide-react"
 import { useApp, roleLabel } from "../context/AppContext"
 import { formatDia, formatQuando, kmLabel } from "../lib/format"
+import { supabaseEnabled } from "../lib/supabase"
+import { uploadDataUrl } from "../services/mediaService"
 
 type Tab = "posts" | "historico" | "conquistas"
 
@@ -67,7 +69,8 @@ export function Perfil() {
     if (!file || !mine) return
     setFotoErro(null)
     try {
-      const fotoUrl = await resizePhoto(file)
+      const dataUrl = await resizePhoto(file)
+      const fotoUrl = supabaseEnabled ? await uploadDataUrl("avatars", dataUrl) : dataUrl
       updateMe({ fotoUrl })
     } catch {
       setFotoErro("Não deu para usar essa imagem. Tente outra foto.")
@@ -111,7 +114,7 @@ export function Perfil() {
           {fotoErro && <p className="mt-1 text-xs text-ember">{fotoErro}</p>}
           <h1 className="mt-3 font-display text-3xl font-extrabold">{profile.nome}</h1>
           <p className="text-sm text-muted">
-            {roleLabel(profile.role)} · membro do Plast's Run
+            {roleLabel(profile.role)} · membro do {data.grupo.nome}
             {profile.meta ? ` · Meta: ${profile.meta}` : ""}
           </p>
           {profile.bio && <p className="mt-2 text-sm text-sand">{profile.bio}</p>}

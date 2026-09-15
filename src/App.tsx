@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom"
+import { invitePath } from "./lib/inviteSlug"
 import { AppProvider, useApp } from "./context/AppContext"
 import { ThemeProvider } from "./context/ThemeContext"
 import { Layout } from "./components/Layout"
@@ -43,7 +44,7 @@ function SessionGate({ children }: { children: ReactNode }) {
 function Guard() {
   const { me } = useApp()
   const location = useLocation()
-  if (!me) return <Navigate to="/g/plasts-run" replace state={{ from: location.pathname }} />
+  if (!me) return <Navigate to={invitePath()} replace state={{ from: location.pathname }} />
   return <Outlet />
 }
 

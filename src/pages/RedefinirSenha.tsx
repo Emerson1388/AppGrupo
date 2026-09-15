@@ -4,6 +4,7 @@ import { useApp } from "../context/AppContext"
 import { AuthShell } from "../components/AuthShell"
 import { PasswordField } from "../components/PasswordField"
 import { passwordIssues } from "../lib/password"
+import { supabaseEnabled } from "../lib/supabase"
 
 export function RedefinirSenha() {
   const { resetPassword } = useApp()
@@ -26,8 +27,8 @@ export function RedefinirSenha() {
       setError(`Senha fraca: ${weak.join(", ")}.`)
       return
     }
-    if (!token) {
-      setError("Link inválido.")
+    if (!supabaseEnabled && !token) {
+      setError("Link inválido ou expirado. Solicite outro.")
       return
     }
     setBusy(true)
