@@ -1,87 +1,56 @@
 # Relatório QA final — AppGrupo
 
-Data: 14/09/2026
+Data: 15/09/2026
 
 ## STATUS GERAL
 
-**PRONTO PARA TESTE REAL MULTIDISPOSITIVO** — não declarado **PRONTO** até o notebook e o celular usarem a mesma conta no seu Supabase.
+**CÓDIGO OK / PRODUÇÃO PENDENTE**
 
-O código trata o Postgres como fonte de verdade. O que falta para o critério absoluto é: (1) rodar o SQL no painel, (2) você executar o roteiro em dois aparelhos.
+Não está **PRONTO** até o notebook e o celular usarem o **mesmo e-mail, a mesma senha e o mesmo projeto Supabase**, com o SQL aplicado.
+
+O código, com `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` presentes, trata Auth + Postgres + Storage como única fonte de verdade. O agente **não** executou o roteiro em dois aparelhos reais nesta sessão.
+
+## Causa raiz (ainda visível no código anterior)
+
+1. Login na nuvem podia cair em `verifyLogin()` local se o Auth não devolvesse `user` sem mensagem de erro.
+2. `hydrateGroupData()` transformava erro de RLS/rede/coluna em `[]` — um aparelho parecia vazio, o outro cheio.
+3. Cadastro de perfil sem convite escolhia `grupos.limit(20)[0]` — grupo diferente por dispositivo.
+4. Mutações (post, like, treino, RSVP) atualizavam o React **antes** do Postgres; se o INSERT falhasse, só aquele aparelho via o dado.
+5. Service Worker `appgrupo-v3` podia devolver o logo do clube no lugar de uma imagem do Storage em rede instável (celular).
 
 ## Matriz
 
 | Funcionalidade | Frontend | Supabase | RLS | Status |
 | --- | --- | --- | --- | --- |
-| Auth | signUp / signIn / signOut / sessão SDK | Auth | n/a | PASS (código) |
-| Perfil | Context → saveProfilePatch | profiles | próprio update; role/grupo_id protegidos | PASS (código) |
-| Treinos | persistTreino | treinos | staff insert | PASS (código) |
-| Presença | persistRsvp | participacoes | usuario_id = uid | PASS (código) |
-| Check-in | RPC + janela 45 min / 3 h | checkins unique | próprio insert | PASS (código) |
-| Feed | persistPost | publicacoes | próprio insert/delete | PASS (código) |
-| Curtidas | persistLike | curtidas PK | próprio | PASS (código) |
-| Comentários | persistComment | comentarios | próprio | PASS (código) |
-| Storage | mediaService | bucket midia | pasta do uid | PASS (código) / CONFIG no painel |
-| Convite | `/g/:slug` + metadata | grupos SELECT público | slug inválido não cadastra | PASS (código) |
-| Ranking | computeMonthlyRanking | check-ins + treinos | leitura do grupo | PASS (código) |
+| Auth | só `signInWithPassword` se nuvem ligada | Auth | n/a | CÓDIGO OK |
+| Perfil / foto | Storage `profile.jpg` → `foto_url` → hydrate | profiles + midia | próprio update | CÓDIGO OK |
+| Treinos | persist depois estado | treinos | staff insert | CÓDIGO OK |
+| Presença | persist depois estado | participacoes | usuario_id = uid | CÓDIGO OK |
+| Check-in | RPC; QR não cai no mock | checkins | próprio insert | CÓDIGO OK |
+| Feed / like / comentário | persist depois estado | publicacoes/curtidas/comentarios | próprio | CÓDIGO OK |
+| Storage | `midia/{uid}/avatars/profile.jpg` | bucket midia | pasta do uid | CÓDIGO OK / CONFIG |
+| Hydrate | erro vira `[SYNC ERROR]`, não lista vazia | todas as tabelas do grupo | grupo_id | CÓDIGO OK |
+| Convite | slug do metadata; sem “primeiro grupo” | grupos | convite | CÓDIGO OK |
+| Ranking | só check-in | checkins + treinos | leitura do grupo | CÓDIGO OK |
 
-## Severidade
+## SQL
 
-```text
-P0: nenhum aberto no código. Pendência = aplicar SQL + teste em dois aparelhos.
-P1: auth.users não é apagado no delete (só o perfil). Documentado.
-P2: bundle JS > 500 kB; auditoria visual 320–1440 px não refeita.
-P3: Playwright E2E não adicionado (evita teste falso com o mesmo localStorage).
-```
+| Arquivo | Papel | No repositório | No projeto remoto |
+| --- | --- | --- | --- |
+| `supabase/schema.sql` | instalação nova | presente | **pendente** se o projeto já existia; rode só se for banco novo |
+| `supabase/sync.sql` | RLS fina + RPC check-in | presente | **pendente até você confirmar no SQL Editor** |
+| `supabase/migrations/20260914_hardening.sql` | Storage `midia`, atleta, admin SQL | presente | **pendente até confirmar** |
+| `supabase/migrations/20260915_convite_slug.sql` | convite | presente | **pendente até confirmar** |
+| `supabase/migrations/20260916_foto_perfil.sql` | upsert foto + WITH CHECK | presente | **pendente até confirmar** |
+| `supabase/liberar-login.sql` | confirma e-mail em dev | presente | opcional |
 
-## AUTENTICAÇÃO: PASS (código) / MANUAL (aparelhos)
+Este agente **não** tem acesso ao SQL Editor do seu projeto. “SQL já aplicado” só você pode marcar.
 
-signUp, signInWithPassword, signOut, getSession, getUser, onAuthStateChange. Sem trim na senha. Sem auth local em produção.
+## BUILD / TESTES
 
-## PERFIL: PASS (código) / MANUAL (aparelhos)
+Rodar nesta máquina: `npm test`, `npm run lint`, `npm run build`.
 
-F5 e foco da janela rehidratam do banco.
-
-## TREINOS: PASS (código) / MANUAL (aparelhos)
-
-## PRESENÇA: PASS (código) / MANUAL (aparelhos)
-
-## CHECK-IN: PASS (código) / MANUAL (aparelhos)
-
-Duplicata e janela no RPC.
-
-## FEED: PASS (código) / MANUAL (aparelhos)
-
-data URL recusada no persist.
-
-## CURTIDAS: PASS (código) / MANUAL (aparelhos)
-
-## COMENTÁRIOS: PASS (código) / MANUAL (aparelhos)
-
-## STORAGE: PASS (código) / CONFIG
-
-Bucket e policies no SQL `20260914_hardening.sql`.
-
-## CONVITE: PASS (código)
-
-Slug inválido não mostra cadastro. Metadata inválido não cai no Plast's Run.
-
-## RLS: PASS (script) / CONFIG
-
-Não desligado. Aplicar `sync.sql` + hardening no projeto.
-
-## MOBILE: PASS parcial
-
-overflow-x-hidden, QR com slug do convite. Teste visual em iPhone/Android ainda manual.
-
-## VERCEL: PASS (configuração descrita)
-
-Não inventamos valores. Ver `docs/CONFIGURACAO-MANUAL.md`.
-
-## BUILD: PASS
-
-## TESTES: PASS (56+ Vitest nesta rodada; conferir comando)
-
-Playwright multidispositivo: não. Seria falso se compartilhasse localStorage.
+Playwright em dois aparelhos: não. Seria falso se compartilhasse o mesmo `localStorage`.
 
 ## localStorage
 
@@ -90,11 +59,14 @@ Playwright multidispositivo: não. Seria falso se compartilhasse localStorage.
 | tema | A — permitido |
 | cookies | A — permitido |
 | `runclub.v2` | só se Supabase **não** estiver nas env |
-| contas locais | só modo demo/testes |
-| invite slug | sessionStorage, preferência de convite |
+| contas locais (`accounts.ts`) | só modo demo / Vitest |
+| sessão Auth do SDK | por aparelho, não é dado de negócio |
+| invite slug | sessionStorage, convite temporário |
+| Data URL / blob | preview da foto **antes** do upload; não grava em `foto_url` |
 
 ## Bugs restantes
 
 1. Teste notebook ↔ celular ainda não executado em hardware.
-2. SQL/Storage/redirects dependem do painel.
-3. Delete de conta não remove `auth.users` (precisa do painel Auth).
+2. SQL/Storage/redirects/Vercel env dependem do painel.
+3. Delete de conta não remove `auth.users`.
+4. Sem SQL de foto/Storage, o upload falha de forma visível (não há mais “sucesso falso” local).

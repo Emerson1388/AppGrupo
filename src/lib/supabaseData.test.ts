@@ -4,10 +4,12 @@ import {
   cloudErrorMessage,
   DEFAULT_AVATAR,
   embeddedFotoError,
+  logSyncError,
   mapProfile,
   officialFotoUrl,
   saveProfilePatch,
 } from "./supabaseData"
+import { localAuthAllowed } from "./supabase"
 
 describe("authErrorMessage", () => {
   it("traduz e-mail não confirmado", () => {
@@ -93,5 +95,18 @@ describe("foto de perfil (fonte única)", () => {
     expect(afterUpload.fotoUrl.startsWith("data:")).toBe(false)
     const afterReload = mapProfile(profileRow(storageUrl), "ana@grupo.test")
     expect(afterReload.fotoUrl).toBe(afterUpload.fotoUrl)
+  })
+})
+
+describe("fonte de verdade na nuvem", () => {
+  it("testes unitários não usam auth local misturada com Supabase", () => {
+    expect(localAuthAllowed()).toBe(true)
+  })
+
+  it("erros de sync não viram silêncio", () => {
+    expect(logSyncError("profiles", "select", "permission denied")).toContain("[SYNC ERROR]")
+    expect(logSyncError("profiles", "select", "permission denied")).toContain("tabela: profiles")
+    expect(logSyncError("profiles", "select", "permission denied")).toContain("operação: select")
+    expect(logSyncError("profiles", "select", "permission denied")).toContain("permission denied")
   })
 })

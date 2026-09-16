@@ -97,7 +97,7 @@ Bucket `midia` com pastas `avatars/`, `posts/`, `stories/`. Foto de perfil em `{
 
 ## 11. Mobile
 
-`overflow-x-hidden` no layout/convite. QR usa o slug do convite. Service worker `appgrupo-v3` (não fica preso no cache v2).
+`overflow-x-hidden` no layout/convite. QR usa o slug do convite. Service worker `appgrupo-v4` (não cacheia Storage/avatars/posts).
 
 ## 12. Vercel
 
@@ -135,7 +135,7 @@ Playwright, segundo grupo real, confirmação de e-mail oficial, Edge Function p
 | P0-07 | Foto diferente no celular | P0 | Corrigido no código | `Perfil.tsx`, `supabaseData.ts` | Storage → `foto_url`; sem pravatar/data URL |
 | P1-02 | Delete = logout | P1 | Corrigido no código | RPC `excluir_minha_conta` | Apaga perfil e cascata |
 | P1-03 | Mock na nuvem | P1 | Corrigido | `supabaseSync.ts` | Sem fallback de mock |
-| P2-01 | PWA cache | P2 | Corrigido | `public/sw.js` | `appgrupo-v3` |
+| P2-01 | PWA cache | P2 | Corrigido | `public/sw.js` | `appgrupo-v4`, sem cache de foto/storage |
 
 ### Critério de aceite (código vs. produção)
 

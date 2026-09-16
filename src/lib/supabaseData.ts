@@ -1,6 +1,6 @@
 import type { User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
-import type { AppData, Grupo, Nivel, Plano, Profile, Role } from "../types"
+import type { Grupo, Nivel, Plano, Profile, Role } from "../types"
 import { readInviteSlug } from "./inviteSlug"
 
 type GrupoRow = {
@@ -74,6 +74,12 @@ export function cloudErrorMessage(raw: string) {
   return "Não foi possível salvar. Tente de novo."
 }
 
+export function logSyncError(table: string, operation: string, message: string) {
+  const text = `[SYNC ERROR]\ntabela: ${table}\noperação: ${operation}\nmensagem: ${message}`
+  console.error(text)
+  return text
+}
+
 export const DEFAULT_AVATAR = "/avatar-default.svg"
 
 export function officialFotoUrl(raw: string | null | undefined) {
@@ -122,16 +128,17 @@ export function mapProfile(row: ProfileRow, fallbackEmail: string): Profile {
   }
 }
 
-async function resolveGrupoId(user: User): Promise<string | null> {
+export async function resolveGrupoId(user: User): Promise<string | null> {
   if (!supabase) return null
   const meta = user.user_metadata ?? {}
   const slug = String(meta.grupo_slug || readInviteSlug() || "").trim().toLowerCase()
-  if (slug) {
-    const { data, error } = await supabase.from("grupos").select("id").eq("slug", slug).maybeSingle()
-    if (!error && data?.id) return data.id
+  if (!slug) return null
+  const { data, error } = await supabase.from("grupos").select("id").eq("slug", slug).maybeSingle()
+  if (error) {
+    logSyncError("grupos", "select slug", error.message)
+    return null
   }
-  const { data } = await supabase.from("grupos").select("id").limit(20)
-  return data?.[0]?.id ?? null
+  return data?.id ?? null
 }
 
 export async function ensureProfile(user: User): Promise<Profile | null> {
@@ -142,11 +149,18 @@ export async function ensureProfile(user: User): Promise<Profile | null> {
     .select("*")
     .eq("id", user.id)
     .maybeSingle()
-  if (readError) return null
+  if (readError) {
+    logSyncError("profiles", "select", readError.message)
+    return null
+  }
   if (existing) {
     return mapProfile(existing as ProfileRow, email)
   }
   const gid = await resolveGrupoId(user)
+  if (!gid) {
+    logSyncError("profiles", "insert", "perfil sem grupo_id — use um convite /g/slug válido")
+    return null
+  }
   const meta = user.user_metadata ?? {}
   const row = {
     id: user.id,
@@ -158,37 +172,11 @@ export async function ensureProfile(user: User): Promise<Profile | null> {
     meta: "Começar e não parar",
   }
   const { data: created, error } = await supabase.from("profiles").insert(row).select("*").single()
-  if (error || !created) return null
-  return mapProfile(created as ProfileRow, email)
-}
-
-export async function hydrateFromSupabase(
-  user: User,
-  current: AppData,
-): Promise<AppData | null> {
-  // Mantido para compatibilidade: o carregamento completo está em hydrateGroupData.
-  if (!supabase) return null
-  const me = await ensureProfile(user)
-  if (!me) return null
-  const [{ data: grupoRow }, { data: profileRows }] = await Promise.all([
-    supabase.from("grupos").select("*").eq("id", me.grupoId).maybeSingle(),
-    supabase.from("profiles").select("*").eq("grupo_id", me.grupoId),
-  ])
-  const grupo = grupoRow ? mapGrupo(grupoRow as GrupoRow) : current.grupo
-  const profiles = (profileRows as ProfileRow[] | null)?.map((p) =>
-    mapProfile(p, p.id === user.id ? (user.email ?? "") : p.email || ""),
-  ) ?? [me]
-  return {
-    ...current,
-    grupo: {
-      ...current.grupo,
-      ...grupo,
-      logoUrl: grupo.logoUrl || current.grupo.logoUrl,
-      spotifyUrl: grupo.spotifyUrl || current.grupo.spotifyUrl,
-    },
-    profiles,
-    currentUserId: user.id,
+  if (error || !created) {
+    if (error) logSyncError("profiles", "insert", error.message)
+    return null
   }
+  return mapProfile(created as ProfileRow, email)
 }
 
 export async function saveProfilePatch(id: string, patch: Partial<Profile>) {

@@ -17,7 +17,7 @@ import type {
   Treino,
   UsuarioConquista,
 } from "../types"
-import { cloudErrorMessage, ensureProfile, mapGrupo, mapProfile } from "./supabaseData"
+import { cloudErrorMessage, ensureProfile, logSyncError, mapGrupo, mapProfile } from "./supabaseData"
 
 function asTime(value: string) {
   return value.length === 5 ? `${value}:00` : value.slice(0, 8)
@@ -44,7 +44,35 @@ function mapTreino(row: Record<string, unknown>): Treino {
   }
 }
 
+class SyncQueryError extends Error {
+  constructor(table: string, operation: string, message: string) {
+    super(logSyncError(table, operation, message))
+    this.name = "SyncQueryError"
+  }
+}
+
+function rows<T>(table: string, res: { data: T[] | null; error: { message: string } | null }) {
+  if (res.error) throw new SyncQueryError(table, "select", res.error.message)
+  return res.data ?? []
+}
+
+function skipQuery<T = never>(): { data: T[]; error: null } {
+  return { data: [], error: null }
+}
+
 export async function hydrateGroupData(userId: string, email: string): Promise<AppData | null> {
+  if (!supabase) return null
+  try {
+    return await loadGroupData(userId, email)
+  } catch (caught) {
+    if (!(caught instanceof SyncQueryError)) {
+      logSyncError("hydrate", "group", caught instanceof Error ? caught.message : "falha desconhecida")
+    }
+    return null
+  }
+}
+
+async function loadGroupData(userId: string, email: string): Promise<AppData | null> {
   if (!supabase) return null
   const { data: auth } = await supabase.auth.getUser()
   const user = auth.user
@@ -52,6 +80,9 @@ export async function hydrateGroupData(userId: string, email: string): Promise<A
   const me = await ensureProfile(user)
   if (!me) return null
   const gid = me.grupoId
+  if (!gid) {
+    throw new SyncQueryError("profiles", "grupo_id", "perfil sem grupo — use o convite /g/slug")
+  }
   const [
     grupoRes,
     profileRes,
@@ -72,12 +103,15 @@ export async function hydrateGroupData(userId: string, email: string): Promise<A
     supabase.from("stories").select("*").eq("grupo_id", gid).gt("expires_at", new Date().toISOString()),
   ])
 
-  const profiles = (profileRes.data ?? []).map((p) =>
+  if (grupoRes.error) throw new SyncQueryError("grupos", "select", grupoRes.error.message)
+  if (!grupoRes.data) throw new SyncQueryError("grupos", "select", "grupo do perfil não encontrado")
+
+  const profiles = rows("profiles", profileRes).map((p) =>
     mapProfile(p, p.id === userId ? email : String(p.email ?? "")),
   )
-  const treinos = (treinoRes.data ?? []).map((row) => mapTreino(row as Record<string, unknown>))
+  const treinos = rows("treinos", treinoRes).map((row) => mapTreino(row as Record<string, unknown>))
   const treinoIds = treinos.map((t) => t.id)
-  const publicacoes: Publicacao[] = (postRes.data ?? []).map((row) => ({
+  const publicacoes: Publicacao[] = rows("publicacoes", postRes).map((row) => ({
     id: String(row.id),
     grupoId: String(row.grupo_id),
     usuarioId: String(row.usuario_id),
@@ -88,7 +122,7 @@ export async function hydrateGroupData(userId: string, email: string): Promise<A
     createdAt: String(row.created_at),
   }))
   const postIds = publicacoes.map((p) => p.id)
-  const sugestoes: Sugestao[] = (sugestaoRes.data ?? []).map((row) => ({
+  const sugestoes: Sugestao[] = rows("sugestoes_treino", sugestaoRes).map((row) => ({
     id: String(row.id),
     grupoId: String(row.grupo_id),
     titulo: String(row.titulo),
@@ -98,7 +132,7 @@ export async function hydrateGroupData(userId: string, email: string): Promise<A
     createdAt: String(row.created_at),
   }))
   const sugestaoIds = sugestoes.map((s) => s.id)
-  const conquistas: Conquista[] = (conquistaRes.data ?? []).map((row) => ({
+  const conquistas: Conquista[] = rows("conquistas", conquistaRes).map((row) => ({
     id: String(row.id),
     codigo: String(row.codigo),
     titulo: String(row.titulo),
@@ -106,39 +140,47 @@ export async function hydrateGroupData(userId: string, email: string): Promise<A
     icone: String(row.icone ?? ""),
   }))
   const profileIds = profiles.map((p) => p.id)
-  const storyRows = storyRes.data ?? []
+  const storyRows = rows("stories", storyRes)
   const storyIds = storyRows.map((s) => String(s.id))
+  const mensagens: Mensagem[] = rows("mensagens", msgRes).map((row) => ({
+    id: String(row.id),
+    deId: String(row.de_id),
+    paraId: String(row.para_id),
+    texto: String(row.texto),
+    createdAt: String(row.created_at),
+    lida: Boolean(row.lida),
+  }))
 
   const [partRes, checkRes, likeRes, commentRes, reactRes, badgeRes, viewRes] = await Promise.all([
     treinoIds.length
       ? supabase.from("participacoes").select("*").in("treino_id", treinoIds)
-      : Promise.resolve({ data: [] }),
+      : skipQuery(),
     treinoIds.length
       ? supabase.from("checkins").select("*").in("treino_id", treinoIds)
-      : Promise.resolve({ data: [] }),
+      : skipQuery(),
     postIds.length
       ? supabase.from("curtidas").select("*").in("publicacao_id", postIds)
-      : Promise.resolve({ data: [] }),
+      : skipQuery(),
     postIds.length
       ? supabase.from("comentarios").select("*").in("publicacao_id", postIds)
-      : Promise.resolve({ data: [] }),
+      : skipQuery(),
     sugestaoIds.length
       ? supabase.from("reacoes_sugestao").select("*").in("sugestao_id", sugestaoIds)
-      : Promise.resolve({ data: [] }),
+      : skipQuery(),
     profileIds.length
       ? supabase.from("usuario_conquistas").select("*").in("usuario_id", profileIds)
-      : Promise.resolve({ data: [] }),
+      : skipQuery(),
     storyIds.length
       ? supabase.from("story_views").select("*").in("story_id", storyIds)
-      : Promise.resolve({ data: [] }),
+      : skipQuery(),
   ])
 
-  const participacoes: Participacao[] = (partRes.data ?? []).map((row) => ({
+  const participacoes: Participacao[] = rows("participacoes", partRes).map((row) => ({
     usuarioId: String(row.usuario_id),
     treinoId: String(row.treino_id),
     createdAt: String(row.created_at),
   }))
-  const checkins: Checkin[] = (checkRes.data ?? []).map((row) => ({
+  const checkins: Checkin[] = rows("checkins", checkRes).map((row) => ({
     id: String(row.id),
     usuarioId: String(row.usuario_id),
     treinoId: String(row.treino_id),
@@ -146,29 +188,29 @@ export async function hydrateGroupData(userId: string, email: string): Promise<A
     status: "presente",
     metodo: (row.metodo as Checkin["metodo"]) || "manual",
   }))
-  const curtidas: Curtida[] = (likeRes.data ?? []).map((row) => ({
+  const curtidas: Curtida[] = rows("curtidas", likeRes).map((row) => ({
     usuarioId: String(row.usuario_id),
     publicacaoId: String(row.publicacao_id),
   }))
-  const comentarios: Comentario[] = (commentRes.data ?? []).map((row) => ({
+  const comentarios: Comentario[] = rows("comentarios", commentRes).map((row) => ({
     id: String(row.id),
     usuarioId: String(row.usuario_id),
     publicacaoId: String(row.publicacao_id),
     texto: String(row.texto),
     createdAt: String(row.created_at),
   }))
-  const reacoes: ReacaoSugestao[] = (reactRes.data ?? []).map((row) => ({
+  const reacoes: ReacaoSugestao[] = rows("reacoes_sugestao", reactRes).map((row) => ({
     usuarioId: String(row.usuario_id),
     sugestaoId: String(row.sugestao_id),
     tipo: row.tipo as ReacaoTipo,
   }))
-  const usuarioConquistas: UsuarioConquista[] = (badgeRes.data ?? []).map((row) => ({
+  const usuarioConquistas: UsuarioConquista[] = rows("usuario_conquistas", badgeRes).map((row) => ({
     usuarioId: String(row.usuario_id),
     conquistaId: String(row.conquista_id),
     unlockedAt: String(row.unlocked_at),
   }))
   const viewsByStory = new Map<string, string[]>()
-  for (const row of viewRes.data ?? []) {
+  for (const row of rows("story_views", viewRes)) {
     const sid = String(row.story_id)
     const list = viewsByStory.get(sid) ?? []
     list.push(String(row.usuario_id))
@@ -184,25 +226,8 @@ export async function hydrateGroupData(userId: string, email: string): Promise<A
     expiresAt: String(row.expires_at),
     viewedBy: viewsByStory.get(String(row.id)) ?? [],
   }))
-  const mensagens: Mensagem[] = (msgRes.data ?? []).map((row) => ({
-    id: String(row.id),
-    deId: String(row.de_id),
-    paraId: String(row.para_id),
-    texto: String(row.texto),
-    createdAt: String(row.created_at),
-    lida: Boolean(row.lida),
-  }))
 
-  const grupo = grupoRes.data
-    ? mapGrupo(grupoRes.data)
-    : {
-        id: gid,
-        nome: "Grupo",
-        slug: "",
-        logoUrl: "/logo-plasts-run.png",
-        plano: "gratuito" as const,
-        limiteAtletas: 30,
-      }
+  const grupo = mapGrupo(grupoRes.data)
   return {
     grupo: {
       ...grupo,
@@ -292,10 +317,7 @@ export async function persistCheckinByToken(token: string): Promise<{ error: str
     const payload = rpc.data as { treino_id?: string } | null
     return { error: null, treinoId: payload?.treino_id }
   }
-  if (!rpcMissing(rpc.error.message, rpc.error.code)) {
-    return { error: cloudErrorMessage(rpc.error.message) }
-  }
-  return { error: null }
+  return { error: cloudErrorMessage(rpc.error.message) }
 }
 
 export async function persistBadges(items: UsuarioConquista[]) {

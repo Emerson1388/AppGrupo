@@ -186,17 +186,38 @@ create policy "admin cria treino" on public.treinos
     )
   );
 
-create policy "participacoes do grupo" on public.participacoes
-  for all using (
+create policy "ver participacoes do grupo" on public.participacoes
+  for select using (
     exists (
       select 1 from public.treinos t
       where t.id = treino_id and t.grupo_id = public.meu_grupo_id()
     )
   );
 
-create policy "checkins do grupo" on public.checkins
-  for all using (
+create policy "confirmar propria presenca" on public.participacoes
+  for insert with check (
+    usuario_id = auth.uid()
+    and exists (
+      select 1 from public.treinos t
+      where t.id = treino_id and t.grupo_id = public.meu_grupo_id()
+    )
+  );
+
+create policy "cancelar propria presenca" on public.participacoes
+  for delete using (usuario_id = auth.uid());
+
+create policy "ver checkins do grupo" on public.checkins
+  for select using (
     exists (
+      select 1 from public.treinos t
+      where t.id = treino_id and t.grupo_id = public.meu_grupo_id()
+    )
+  );
+
+create policy "registrar proprio checkin" on public.checkins
+  for insert with check (
+    usuario_id = auth.uid()
+    and exists (
       select 1 from public.treinos t
       where t.id = treino_id and t.grupo_id = public.meu_grupo_id()
     )
@@ -211,27 +232,53 @@ create policy "publicar no grupo" on public.publicacoes
 create policy "apagar o próprio post" on public.publicacoes
   for delete using (usuario_id = auth.uid());
 
-create policy "curtidas" on public.curtidas
-  for all using (
+create policy "ver curtidas" on public.curtidas
+  for select using (
     exists (
       select 1 from public.publicacoes p
       where p.id = publicacao_id and p.grupo_id = public.meu_grupo_id()
     )
   );
 
-create policy "comentarios" on public.comentarios
-  for all using (
+create policy "curtir" on public.curtidas
+  for insert with check (usuario_id = auth.uid());
+
+create policy "descurtir" on public.curtidas
+  for delete using (usuario_id = auth.uid());
+
+create policy "ver comentarios" on public.comentarios
+  for select using (
     exists (
       select 1 from public.publicacoes p
       where p.id = publicacao_id and p.grupo_id = public.meu_grupo_id()
     )
   );
+
+create policy "comentar" on public.comentarios
+  for insert with check (usuario_id = auth.uid() and char_length(trim(texto)) between 1 and 2000);
+
+create policy "apagar proprio comentario" on public.comentarios
+  for delete using (usuario_id = auth.uid());
 
 create policy "sugestoes" on public.sugestoes_treino
   for select using (grupo_id = public.meu_grupo_id());
 
-create policy "reacoes" on public.reacoes_sugestao
-  for all using (true);
+create policy "ver reacoes" on public.reacoes_sugestao
+  for select using (
+    exists (
+      select 1 from public.sugestoes_treino s
+      where s.id = sugestao_id and s.grupo_id = public.meu_grupo_id()
+    )
+  );
+
+create policy "reagir" on public.reacoes_sugestao
+  for insert with check (usuario_id = auth.uid());
+
+create policy "trocar reacao" on public.reacoes_sugestao
+  for update using (usuario_id = auth.uid());
+
+create policy "tirar reacao" on public.reacoes_sugestao
+  for delete using (usuario_id = auth.uid());
 
 create policy "ver conquistas" on public.conquistas
   for select using (true);
@@ -243,6 +290,9 @@ create policy "ver badges" on public.usuario_conquistas
       where p.id = usuario_id and p.grupo_id = public.meu_grupo_id()
     )
   );
+
+create policy "ganhar badge" on public.usuario_conquistas
+  for insert with check (usuario_id = auth.uid());
 
 create table if not exists public.mensagens (
   id uuid primary key default gen_random_uuid(),
@@ -286,6 +336,17 @@ create policy "criar próprio story" on public.stories
 
 create policy "apagar próprio story" on public.stories
   for delete using (usuario_id = auth.uid());
+
+create policy "ver views do grupo" on public.story_views
+  for select using (
+    exists (
+      select 1 from public.stories s
+      where s.id = story_id and s.grupo_id = public.meu_grupo_id()
+    )
+  );
+
+create policy "registrar view" on public.story_views
+  for insert with check (usuario_id = auth.uid());
 
 insert into public.conquistas (codigo, titulo, descricao, icone) values
   ('primeiro_treino', 'Primeiro treino', 'Você apareceu. O resto é consistência.', '🏅'),

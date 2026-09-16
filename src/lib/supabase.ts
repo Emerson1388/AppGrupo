@@ -5,6 +5,11 @@ const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
 export const supabaseEnabled = Boolean(url && anon)
 
+/** Contas em localStorage só existem no modo demo, sem env do Supabase. */
+export function localAuthAllowed() {
+  return !supabaseEnabled
+}
+
 export const supabase = supabaseEnabled
   ? createClient(url!, anon!, {
       auth: {
