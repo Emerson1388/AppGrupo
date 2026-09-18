@@ -64,7 +64,7 @@ describe("confirmAccount / verifyLogin", () => {
     const wrong = await verifyLogin(atleta.email, "senhaErrada1")
     expect(wrong.error).toBe("E-mail ou senha incorretos.")
     const missing = await verifyLogin("naoexiste@plasts.run", atleta.password)
-    expect(missing.error).toMatch(/não existe neste aparelho/i)
+    expect(missing.error).toMatch(/não conferem/i)
   })
 
   it("rejeita token de confirmação inválido ou expirado", () => {

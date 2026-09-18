@@ -75,8 +75,7 @@ export async function verifyLogin(email: string, password: string) {
   const idx = accounts.findIndex((a) => a.email.toLowerCase() === email.trim().toLowerCase())
   if (idx < 0) {
     return {
-      error:
-        "Essa conta não existe neste aparelho. No celular é preciso criar a conta de novo — o cadastro do computador não passa sozinho." as const,
+      error: "E-mail ou senha não conferem." as const,
     }
   }
   const account = accounts[idx]

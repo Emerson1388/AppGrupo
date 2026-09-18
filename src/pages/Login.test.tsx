@@ -7,6 +7,8 @@ import { renderApp } from "../test/helpers"
 vi.mock("../lib/supabase", () => ({
   supabaseEnabled: false,
   supabase: null,
+  localAuthAllowed: () => true,
+  CLOUD_SETUP_ERROR: "nuvem não configurada",
 }))
 
 beforeEach(() => {
@@ -23,12 +25,14 @@ describe("Login", () => {
     expect(screen.getByRole("link", { name: /criar conta/i })).toBeInTheDocument()
   })
 
-  it("avisa quando a conta não existe neste aparelho", async () => {
+  it("não diz que a conta é só deste aparelho", async () => {
     const user = userEvent.setup()
     renderApp(<Login />, { route: "/login" })
     await user.type(screen.getByLabelText(/^e-mail$/i), "ana@plasts.run")
     await user.type(screen.getByLabelText(/^senha$/i), "corrida12")
     await user.click(screen.getByRole("button", { name: /entrar/i }))
-    expect(await screen.findByText(/não existe neste aparelho|não conferem/i)).toBeInTheDocument()
+    const alert = await screen.findByText(/não conferem|incorretos/i)
+    expect(alert).toBeInTheDocument()
+    expect(alert.textContent).not.toMatch(/neste aparelho/i)
   })
 })

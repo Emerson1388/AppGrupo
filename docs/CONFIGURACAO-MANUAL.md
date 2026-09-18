@@ -48,7 +48,7 @@ VITE_SUPABASE_ANON_KEY
 VITE_PUBLIC_APP_URL
 ```
 
-`VITE_PUBLIC_APP_URL` = URL pública do app (para o QR do celular). Redeploy depois de salvar.
+`VITE_PUBLIC_APP_URL` = URL pública do app (para o QR do celular). **As variáveis `VITE_*` entram no JavaScript na hora do build.** Depois de salvar na Vercel, faça Redeploy. Sem isso o celular cai no modo demo e parece que a conta “não existe neste aparelho”.
 
 ## 6. Conferência rápida
 

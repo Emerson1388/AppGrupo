@@ -1,17 +1,20 @@
 import { createClient } from "@supabase/supabase-js"
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+const url = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim()
+const anon = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim()
 
 export const supabaseEnabled = Boolean(url && anon)
 
-/** Contas em localStorage só existem no modo demo, sem env do Supabase. */
+export const CLOUD_SETUP_ERROR =
+  "Este endereço está sem a nuvem do grupo. No celular abra o mesmo link de produção do computador (não o IP local) e publique de novo com VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY."
+
+/** Contas em localStorage só no Vite de desenvolvimento, nunca no build de produção. */
 export function localAuthAllowed() {
-  return !supabaseEnabled
+  return !supabaseEnabled && import.meta.env.DEV
 }
 
 export const supabase = supabaseEnabled
-  ? createClient(url!, anon!, {
+  ? createClient(url, anon, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,

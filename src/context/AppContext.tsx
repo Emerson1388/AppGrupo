@@ -23,7 +23,7 @@ import {
   verifyLogin,
 } from "../lib/accounts"
 import { passwordIssues } from "../lib/password"
-import { supabase, supabaseEnabled } from "../lib/supabase"
+import { supabase, supabaseEnabled, localAuthAllowed, CLOUD_SETUP_ERROR } from "../lib/supabase"
 import type { User } from "@supabase/supabase-js"
 import {
   authErrorMessage,
@@ -168,7 +168,7 @@ type AppContextValue = {
 const AppContext = createContext<AppContextValue | null>(null)
 
 function loadState(): AppData {
-  if (supabaseEnabled) return emptyCloudState()
+  if (supabaseEnabled || !localAuthAllowed()) return emptyCloudState()
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return initialData
@@ -241,7 +241,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   dataRef.current = data
 
   useEffect(() => {
-    if (supabaseEnabled) return
+    if (supabaseEnabled || !localAuthAllowed()) return
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
   }, [data])
 
@@ -338,6 +338,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       return firstMsg ? authErrorMessage(firstMsg) : "Não foi possível entrar. Tente de novo."
     }
+    if (!localAuthAllowed()) return CLOUD_SETUP_ERROR
     const result = await verifyLogin(mail, pass)
     if (result.error) return result.error
     const profileId = "account" in result ? result.account.profileId : null
@@ -402,6 +403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         pendingEmail: mail,
       }
     }
+    if (!localAuthAllowed()) return { error: CLOUD_SETUP_ERROR }
     const created = await createPendingAccount(input)
     if (created.error) return { error: created.error }
     return {
@@ -412,6 +414,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [data.profiles])
 
   const confirmEmail = useCallback((token: string) => {
+    if (!localAuthAllowed()) return CLOUD_SETUP_ERROR
     const result = confirmAccount(token)
     if (result.error) return result.error
     const account = result.account
@@ -456,6 +459,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (error) return { token: null }
       return { token: null }
     }
+    if (!localAuthAllowed()) return { token: null }
     const { token } = startPasswordReset(email)
     return { token }
   }, [])
@@ -468,6 +472,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (error) return authErrorMessage(error.message)
       return null
     }
+    if (!localAuthAllowed()) return CLOUD_SETUP_ERROR
     const result = await completePasswordReset(token, password)
     return result.error
   }, [])

@@ -1,4 +1,4 @@
-const CACHE = "appgrupo-v4"
+const CACHE = "appgrupo-v5"
 const SHELL = ["/logo-plasts-run.png", "/avatar-default.svg"]
 
 function shouldBypass(request) {

@@ -4,6 +4,7 @@ import { useApp } from "../context/AppContext"
 import { AuthShell } from "../components/AuthShell"
 import { PasswordField } from "../components/PasswordField"
 import { PhoneAccess } from "../components/PhoneAccess"
+import { supabaseEnabled, localAuthAllowed, CLOUD_SETUP_ERROR } from "../lib/supabase"
 
 export function Login() {
   const { me, login, data } = useApp()
@@ -14,6 +15,7 @@ export function Login() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const cloudMissing = !supabaseEnabled && !localAuthAllowed()
 
   if (me) return <Navigate to={from.startsWith("/g/") ? "/" : from} replace />
 
@@ -36,6 +38,11 @@ export function Login() {
         Use o mesmo e-mail e a mesma senha em qualquer aparelho. A conta fica na nuvem, não só neste
         celular ou computador.
       </p>
+      {cloudMissing && (
+        <p className="mt-4 rounded-2xl border border-ember/40 bg-card px-3 py-2 text-sm text-ember">
+          {CLOUD_SETUP_ERROR}
+        </p>
+      )}
 
       <div className="mt-8 rounded-3xl border border-line bg-card p-5">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
@@ -68,12 +75,14 @@ export function Login() {
           {error && (
             <div className="space-y-1">
               <p className="text-sm text-ember">{error}</p>
-              <p className="text-xs text-muted">
-                Primeira vez neste celular?{" "}
-                <Link to="/cadastro" className="font-semibold text-lime">
-                  Criar conta
-                </Link>
-              </p>
+              {!cloudMissing && (
+                <p className="text-xs text-muted">
+                  Ainda não tem conta?{" "}
+                  <Link to="/cadastro" className="font-semibold text-lime">
+                    Criar conta
+                  </Link>
+                </p>
+              )}
             </div>
           )}
           <button
