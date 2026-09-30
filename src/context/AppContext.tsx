@@ -23,7 +23,7 @@ import {
   verifyLogin,
 } from "../lib/accounts"
 import { passwordIssues } from "../lib/password"
-import { supabase, supabaseEnabled, localAuthAllowed, CLOUD_SETUP_ERROR } from "../lib/supabase"
+import { supabase, supabaseEnabled, localAuthAllowed } from "../lib/supabase"
 import type { User } from "@supabase/supabase-js"
 import {
   authErrorMessage,
@@ -338,7 +338,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       return firstMsg ? authErrorMessage(firstMsg) : "Não foi possível entrar. Tente de novo."
     }
-    if (!localAuthAllowed()) return CLOUD_SETUP_ERROR
+    if (!localAuthAllowed()) return "Não foi possível entrar. Tente de novo."
     const result = await verifyLogin(mail, pass)
     if (result.error) return result.error
     const profileId = "account" in result ? result.account.profileId : null
@@ -403,7 +403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         pendingEmail: mail,
       }
     }
-    if (!localAuthAllowed()) return { error: CLOUD_SETUP_ERROR }
+    if (!localAuthAllowed()) return { error: "Não foi possível concluir. Tente de novo." }
     const created = await createPendingAccount(input)
     if (created.error) return { error: created.error }
     return {
@@ -414,7 +414,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [data.profiles])
 
   const confirmEmail = useCallback((token: string) => {
-    if (!localAuthAllowed()) return CLOUD_SETUP_ERROR
+    if (!localAuthAllowed()) return "Não foi possível concluir. Tente de novo."
     const result = confirmAccount(token)
     if (result.error) return result.error
     const account = result.account
@@ -472,7 +472,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (error) return authErrorMessage(error.message)
       return null
     }
-    if (!localAuthAllowed()) return CLOUD_SETUP_ERROR
+    if (!localAuthAllowed()) return "Não foi possível concluir. Tente de novo."
     const result = await completePasswordReset(token, password)
     return result.error
   }, [])

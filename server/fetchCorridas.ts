@@ -7,7 +7,6 @@ import {
   type CorridasResposta,
   type FonteStatus,
 } from "../src/lib/corridas.ts"
-
 const UA = "PlastsRun/1.0 (calendario do clube)"
 const CACHE_MS = 15 * 60 * 1000
 let cache: { key: string; at: number; payload: CorridasResposta } | null = null

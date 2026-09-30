@@ -8,7 +8,6 @@ vi.mock("../lib/supabase", () => ({
   supabaseEnabled: false,
   supabase: null,
   localAuthAllowed: () => true,
-  CLOUD_SETUP_ERROR: "nuvem não configurada",
 }))
 
 beforeEach(() => {
