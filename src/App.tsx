@@ -52,7 +52,6 @@ export default function App() {
     <ThemeProvider>
       <AppProvider>
         <BrowserRouter>
-          <SessionGate>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
@@ -64,26 +63,33 @@ export default function App() {
             <Route path="/privacidade" element={<Privacidade />} />
             <Route path="/termos" element={<Termos />} />
             <Route path="/g/:slug" element={<Convite />} />
-            <Route element={<Guard />}>
-              <Route path="/checkin/:token" element={<CheckinQr />} />
-              <Route element={<Layout />}>
-                <Route path="/" element={<Feed />} />
-                <Route path="/agenda" element={<Agenda />} />
-                <Route path="/agenda/:id" element={<TreinoDetalhe />} />
-                <Route path="/corridas" element={<Calendario />} />
-                <Route path="/ranking" element={<Ranking />} />
-                <Route path="/perfil" element={<Perfil />} />
-                <Route path="/perfil/:id" element={<Perfil />} />
-                <Route path="/novo-treino" element={<NovoTreino />} />
-                <Route path="/sugestoes" element={<Sugestoes />} />
-                <Route path="/mensagens" element={<Mensagens />} />
-                <Route path="/mensagens/:id" element={<Conversa />} />
-                <Route path="/membros" element={<Membros />} />
+            <Route
+              element={
+                <SessionGate>
+                  <Outlet />
+                </SessionGate>
+              }
+            >
+              <Route element={<Guard />}>
+                <Route path="/checkin/:token" element={<CheckinQr />} />
+                <Route element={<Layout />}>
+                  <Route path="/" element={<Feed />} />
+                  <Route path="/agenda" element={<Agenda />} />
+                  <Route path="/agenda/:id" element={<TreinoDetalhe />} />
+                  <Route path="/corridas" element={<Calendario />} />
+                  <Route path="/ranking" element={<Ranking />} />
+                  <Route path="/perfil" element={<Perfil />} />
+                  <Route path="/perfil/:id" element={<Perfil />} />
+                  <Route path="/novo-treino" element={<NovoTreino />} />
+                  <Route path="/sugestoes" element={<Sugestoes />} />
+                  <Route path="/mensagens" element={<Mensagens />} />
+                  <Route path="/mensagens/:id" element={<Conversa />} />
+                  <Route path="/membros" element={<Membros />} />
+                </Route>
               </Route>
             </Route>
           </Routes>
           <CookieNotice />
-          </SessionGate>
         </BrowserRouter>
       </AppProvider>
     </ThemeProvider>

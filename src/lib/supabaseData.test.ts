@@ -21,7 +21,11 @@ describe("authErrorMessage", () => {
   })
 
   it("traduz e-mail já cadastrado", () => {
-    expect(authErrorMessage("User already registered")).toBe("Esse e-mail já está cadastrado.")
+    expect(authErrorMessage("User already registered")).toMatch(/já está cadastrado/i)
+  })
+
+  it("traduz erro de banco no cadastro", () => {
+    expect(authErrorMessage("Database error saving new user")).toMatch(/banco recusou/i)
   })
 
   it("traduz senha fraca do provedor", () => {

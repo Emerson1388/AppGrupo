@@ -38,7 +38,10 @@ export function authErrorMessage(raw: string) {
     return "E-mail ou senha não conferem."
   }
   if (m.includes("already registered") || m.includes("already been registered")) {
-    return "Esse e-mail já está cadastrado."
+    return "Esse e-mail já está cadastrado. Entre com a mesma senha — não crie outra conta."
+  }
+  if (m.includes("database error") || m.includes("error saving user") || m.includes("error creating user")) {
+    return "O banco recusou o cadastro. No Supabase, rode supabase/migrations/20261104_login_dispositivos.sql."
   }
   if (m.includes("password")) return "Senha inválida. Use pelo menos 8 caracteres."
   if (m.includes("failed to fetch") || m.includes("network") || m.includes("fetch")) {

@@ -36,8 +36,9 @@ export function VerificarEmail() {
         </Link>
       )}
       <p className="mt-6 text-center text-sm text-muted">
+        Já confirmei o e-mail?{" "}
         <Link to="/login" className="font-semibold text-lime">
-          Voltar ao login
+          Entrar
         </Link>
       </p>
     </AuthShell>

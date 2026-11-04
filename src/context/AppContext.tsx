@@ -252,6 +252,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return
     }
     let cancel = false
+    const markReady = () => {
+      if (!cancel) setAuthReady(true)
+    }
+    const readyTimer = window.setTimeout(markReady, 6000)
     const applyUser = async (userId: string) => {
       const { data: sessionData } = await client.auth.getUser()
       const user = sessionData.user
@@ -265,11 +269,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCloudError("Não foi possível carregar os dados do grupo. Tente de novo.")
       }
     }
-    void client.auth.getSession().then(async ({ data: sessionWrap }) => {
-      const user = sessionWrap.session?.user
-      if (user) await applyUser(user.id)
-      if (!cancel) setAuthReady(true)
-    })
+    void client.auth
+      .getSession()
+      .then(async ({ data: sessionWrap }) => {
+        try {
+          const user = sessionWrap.session?.user
+          if (user) await applyUser(user.id)
+        } finally {
+          window.clearTimeout(readyTimer)
+          markReady()
+        }
+      })
+      .catch(() => {
+        window.clearTimeout(readyTimer)
+        markReady()
+      })
     const { data: sub } = client.auth.onAuthStateChange((event, session) => {
       if (event === "INITIAL_SESSION") return
       if (event === "SIGNED_OUT" || !session?.user) {
@@ -291,6 +305,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.addEventListener("focus", refresh)
     return () => {
       cancel = true
+      window.clearTimeout(readyTimer)
       sub.subscription.unsubscribe()
       document.removeEventListener("visibilitychange", refresh)
       window.removeEventListener("focus", refresh)

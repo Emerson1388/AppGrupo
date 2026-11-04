@@ -1,7 +1,18 @@
 import { createClient } from "@supabase/supabase-js"
 
-const url = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim()
-const anon = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim()
+/** Chave publishable do Plast's Run — pública de propósito (RLS protege os dados). */
+const PUBLIC_URL = "https://nrzgxnacvljenqlmbglv.supabase.co"
+const PUBLIC_ANON = "sb_publishable_rzc4j_zLVEjhntzdehyTZg_l11sWCwD"
+
+function inUnitTest() {
+  return import.meta.env.MODE === "test"
+}
+
+const fromEnvUrl = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim()
+const fromEnvAnon = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim()
+
+const url = fromEnvUrl || (inUnitTest() ? "" : PUBLIC_URL)
+const anon = fromEnvAnon || (inUnitTest() ? "" : PUBLIC_ANON)
 
 export const supabaseEnabled = Boolean(url && anon)
 
