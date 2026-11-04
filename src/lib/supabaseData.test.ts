@@ -13,13 +13,11 @@ import { localAuthAllowed } from "./supabase"
 
 describe("authErrorMessage", () => {
   it("traduz e-mail não confirmado", () => {
-    expect(authErrorMessage("Email not confirmed")).toMatch(/não está chegando|sql editor/i)
-    expect(authErrorMessage("Invalid login credentials", "email_not_confirmed")).toMatch(/sql editor/i)
+    expect(authErrorMessage("Email not confirmed")).toMatch(/não foi possível entrar/i)
   })
 
   it("traduz login inválido", () => {
     expect(authErrorMessage("Invalid login credentials")).toMatch(/não conferem/i)
-    expect(authErrorMessage("Invalid login credentials")).toMatch(/20261104|sql editor/i)
   })
 
   it("traduz e-mail já cadastrado", () => {
@@ -27,7 +25,7 @@ describe("authErrorMessage", () => {
   })
 
   it("traduz erro de banco no cadastro", () => {
-    expect(authErrorMessage("Database error saving new user")).toMatch(/banco recusou/i)
+    expect(authErrorMessage("Database error saving new user")).toMatch(/não foi possível criar/i)
   })
 
   it("traduz senha fraca do provedor", () => {

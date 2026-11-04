@@ -327,7 +327,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const finishCloud = async (user: User) => {
       const next = await hydrateGroupData(user.id, user.email ?? "")
-      if (!next) return "Conta criada, mas o perfil não apareceu. Rode supabase/connect.sql no SQL Editor."
+      if (!next) return "Não foi possível carregar o grupo. Tente entrar de novo."
       setData(next)
       return null
     }
@@ -420,7 +420,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ).data.user
       if (sessionUser) {
         const next = await hydrateGroupData(sessionUser.id, sessionUser.email ?? "")
-        if (!next) return { error: "Conta criada, mas o perfil não apareceu. Rode supabase/connect.sql no SQL Editor." }
+        if (!next) return { error: "Não foi possível carregar o grupo. Tente entrar de novo." }
         setData(next)
         return { error: null }
       }

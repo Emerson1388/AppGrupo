@@ -42,10 +42,14 @@ export function Cadastro() {
       setError(result.error)
       return
     }
-    if (result.pendingEmail) {
+    if (result.confirmToken && result.pendingEmail) {
       navigate("/verificar-email", {
         state: { email: result.pendingEmail, confirmToken: result.confirmToken },
       })
+      return
+    }
+    if (result.pendingEmail) {
+      navigate("/login", { replace: true, state: { email: result.pendingEmail } })
       return
     }
     navigate("/")

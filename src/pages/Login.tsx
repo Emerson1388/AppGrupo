@@ -9,8 +9,9 @@ export function Login() {
   const { me, login, data } = useApp()
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as { from?: string } | null)?.from ?? "/"
-  const [email, setEmail] = useState("")
+  const fromState = location.state as { from?: string; email?: string } | null
+  const from = fromState?.from ?? "/"
+  const [email, setEmail] = useState(fromState?.email ?? "")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)

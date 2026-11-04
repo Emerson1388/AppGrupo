@@ -32,16 +32,16 @@ type ProfileRow = {
 export function authErrorMessage(raw: string, code = "") {
   const m = `${code} ${raw}`.toLowerCase()
   if (m.includes("email_not_confirmed") || m.includes("email not confirmed")) {
-    return "A conta existe, mas ainda não foi liberada: o e-mail de confirmação não está chegando. No Supabase, SQL Editor, rode 20261104_login_dispositivos.sql e entre de novo com a mesma senha."
+    return "Não foi possível entrar. Tente de novo."
   }
   if (m.includes("invalid login") || m.includes("invalid_credentials")) {
-    return "E-mail ou senha não conferem. Se você se cadastrou agora, rode no SQL Editor o arquivo 20261104_login_dispositivos.sql — o e-mail de confirmação não está sendo enviado."
+    return "E-mail ou senha não conferem."
   }
   if (m.includes("already registered") || m.includes("already been registered")) {
     return "Esse e-mail já está cadastrado. Entre com a mesma senha — não crie outra conta."
   }
   if (m.includes("database error") || m.includes("error saving user") || m.includes("error creating user")) {
-    return "O banco recusou o cadastro. No Supabase, rode supabase/migrations/20261104_login_dispositivos.sql."
+    return "Não foi possível criar a conta. Tente de novo."
   }
   if (m.includes("password")) return "Senha inválida. Use pelo menos 8 caracteres."
   if (m.includes("failed to fetch") || m.includes("network") || m.includes("fetch")) {

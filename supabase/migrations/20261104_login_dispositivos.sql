@@ -1,28 +1,9 @@
--- COLE NO SQL EDITOR DO SUPABASE E CLIQUE EM RUN.
--- Libera quem já se cadastrou (o e-mail de confirmação não está chegando)
--- e faz os próximos cadastros já entrarem com a senha.
--- Se o trigger der erro, selecione só o primeiro UPDATE e rode de novo.
+-- Rode SÓ este arquivo no SQL Editor. Não junta com outros scripts.
+-- Confirma as contas que já existem para a senha passar a valer.
 
 update auth.users
 set email_confirmed_at = coalesce(email_confirmed_at, now())
 where email_confirmed_at is null;
-
-create or replace function public.confirm_user_email()
-returns trigger
-language plpgsql
-security definer
-set search_path = auth, public
-as $$
-begin
-  new.email_confirmed_at := coalesce(new.email_confirmed_at, now());
-  return new;
-end;
-$$;
-
-drop trigger if exists confirm_user_email on auth.users;
-create trigger confirm_user_email
-  before insert on auth.users
-  for each row execute procedure public.confirm_user_email();
 
 update public.profiles p
 set grupo_id = g.id
