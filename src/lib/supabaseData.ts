@@ -131,8 +131,7 @@ export function mapProfile(row: ProfileRow, fallbackEmail: string): Profile {
 export async function resolveGrupoId(user: User): Promise<string | null> {
   if (!supabase) return null
   const meta = user.user_metadata ?? {}
-  const slug = String(meta.grupo_slug || readInviteSlug() || "").trim().toLowerCase()
-  if (!slug) return null
+  const slug = String(meta.grupo_slug || readInviteSlug() || "plasts-run").trim().toLowerCase()
   const { data, error } = await supabase.from("grupos").select("id").eq("slug", slug).maybeSingle()
   if (error) {
     logSyncError("grupos", "select slug", error.message)
@@ -154,7 +153,18 @@ export async function ensureProfile(user: User): Promise<Profile | null> {
     return null
   }
   if (existing) {
-    return mapProfile(existing as ProfileRow, email)
+    const mapped = mapProfile(existing as ProfileRow, email)
+    if (mapped.grupoId) return mapped
+    const gid = await resolveGrupoId(user)
+    if (!gid) return mapped
+    const { data: attached, error: attachError } = await supabase
+      .from("profiles")
+      .update({ grupo_id: gid })
+      .eq("id", user.id)
+      .select("*")
+      .maybeSingle()
+    if (attachError) logSyncError("profiles", "update grupo_id", attachError.message)
+    return attached ? mapProfile(attached as ProfileRow, email) : mapped
   }
   const gid = await resolveGrupoId(user)
   if (!gid) {

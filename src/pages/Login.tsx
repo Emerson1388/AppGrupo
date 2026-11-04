@@ -69,9 +69,10 @@ export function Login() {
             <div className="space-y-1">
               <p className="text-sm text-ember">{error}</p>
               <p className="text-xs text-muted">
-                Ainda não tem conta?{" "}
+                Já cadastrou no computador ou no celular? Use o mesmo e-mail e senha. Não crie outra
+                conta.{" "}
                 <Link to="/cadastro" className="font-semibold text-lime">
-                  Criar conta
+                  Ainda não tem conta?
                 </Link>
               </p>
             </div>

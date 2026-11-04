@@ -383,11 +383,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
           data: {
             nome: input.nome.trim(),
             nivel: input.nivel,
-            grupo_slug: readInviteSlug() ?? undefined,
+            grupo_slug: readInviteSlug() || "plasts-run",
           },
         },
       })
-      if (error) return { error: authErrorMessage(error.message) }
+      if (error) {
+        const already = error.message.toLowerCase().includes("already registered")
+          || error.message.toLowerCase().includes("already been registered")
+        if (already) {
+          const signed = await supabase.auth.signInWithPassword({ email: mail, password: pass })
+          if (!signed.error && signed.data.user) {
+            const next = await hydrateGroupData(signed.data.user.id, signed.data.user.email ?? "")
+            if (next) {
+              setData(next)
+              return { error: null }
+            }
+          }
+          return { error: "Esse e-mail já está cadastrado. Entre com a mesma senha — não crie outra conta." }
+        }
+        return { error: authErrorMessage(error.message) }
+      }
       const sessionUser = created.session?.user
         ?? (
           await supabase.auth.signInWithPassword({ email: mail, password: pass })

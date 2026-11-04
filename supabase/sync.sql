@@ -21,7 +21,7 @@ begin
       new.role := old.role;
     end if;
   end if;
-  if new.grupo_id is distinct from old.grupo_id then
+  if new.grupo_id is distinct from old.grupo_id and old.grupo_id is not null then
     new.grupo_id := old.grupo_id;
   end if;
   return new;

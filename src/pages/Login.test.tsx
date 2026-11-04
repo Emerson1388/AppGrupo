@@ -18,6 +18,7 @@ describe("Login", () => {
   it("mostra o formulário do Plast's Run", () => {
     renderApp(<Login />, { route: "/login" })
     expect(screen.getByText(/Login · Plast's Run/i)).toBeInTheDocument()
+    expect(screen.getByText(/qualquer aparelho/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/^e-mail$/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/^senha$/i)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /entrar/i })).toBeInTheDocument()
@@ -33,5 +34,6 @@ describe("Login", () => {
     const alert = await screen.findByText(/não conferem|incorretos/i)
     expect(alert).toBeInTheDocument()
     expect(alert.textContent).not.toMatch(/neste aparelho/i)
+    expect(screen.getByText(/não crie outra conta/i)).toBeInTheDocument()
   })
 })

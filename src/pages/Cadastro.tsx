@@ -4,6 +4,7 @@ import { useApp } from "../context/AppContext"
 import { AuthShell } from "../components/AuthShell"
 import { PasswordField } from "../components/PasswordField"
 import { passwordIssues } from "../lib/password"
+import { rememberInviteSlug, readInviteSlug } from "../lib/inviteSlug"
 import type { Nivel } from "../types"
 
 export function Cadastro() {
@@ -17,6 +18,8 @@ export function Cadastro() {
   const [lgpd, setLgpd] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  if (!readInviteSlug()) rememberInviteSlug("plasts-run")
 
   if (me) return <Navigate to="/" replace />
 
@@ -51,8 +54,8 @@ export function Cadastro() {
   return (
     <AuthShell>
       <p className="mt-4 text-sm text-muted">
-        Cadastre uma vez. A mesma senha entra no computador e no celular. Se o app pedir, confirme o
-        e-mail antes do primeiro login no outro aparelho.
+        Cadastre só uma vez. A conta fica no banco do grupo: o mesmo e-mail e senha entram no
+        computador, no celular e em qualquer lugar. Se já se cadastrou, volte e use Entrar.
       </p>
 
       <form onSubmit={(e) => void onSubmit(e)} className="mt-8 space-y-4">

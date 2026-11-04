@@ -16,10 +16,11 @@ Conta: o mesmo e-mail e a mesma senha nos dois. Não documentar a senha.
    - `supabase/migrations/20260914_hardening.sql`
    - `supabase/migrations/20260915_convite_slug.sql`
    - `supabase/migrations/20260916_foto_perfil.sql`
+   - `supabase/migrations/20261104_login_dispositivos.sql`
 2. Conferir na Vercel: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_PUBLIC_APP_URL`.
 3. Redeploy.
 4. Abrir a **URL de produção** nos dois aparelhos (não `localhost` no celular contra um banco e produção no notebook).
-5. No celular, se o app estiver instalado como PWA antigo: desinstalar ou limpar dados do site para pegar o SW `appgrupo-v5`.
+5. No celular, se o app estiver instalado como PWA antigo: desinstalar ou limpar dados do site para pegar o SW `appgrupo-v6`.
 
 ## Foto (obrigatório)
 

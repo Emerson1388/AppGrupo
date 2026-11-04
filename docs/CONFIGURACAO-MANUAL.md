@@ -11,7 +11,8 @@ Rode **nesta ordem**, um arquivo por vez:
 3. `supabase/migrations/20260914_hardening.sql` — convite público, Storage `midia`, usuários sempre atleta, `promover_admin`, `excluir_minha_conta`.
 4. `supabase/migrations/20260915_convite_slug.sql` — convite inválido **não** entra no Plast's Run.
 5. `supabase/migrations/20260916_foto_perfil.sql` — upsert da foto só na pasta do usuário + update do próprio `profiles`.
-6. Opcional: `supabase/liberar-login.sql` se o segundo aparelho recusar “e-mail não confirmado”.
+6. `supabase/migrations/20261104_login_dispositivos.sql` — confirma e-mails no Auth e permite preencher `grupo_id` vazio. **Obrigatório para o mesmo login no celular e no computador.**
+7. Opcional se o passo 6 já rodou: `supabase/liberar-login.sql` (mesmo efeito de confirmação de e-mail).
 
 ## 2. Promover o treinador
 

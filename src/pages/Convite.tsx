@@ -8,14 +8,17 @@ import { SpotifyLink } from "../components/SpotifyLink"
 import { rememberInviteSlug } from "../lib/inviteSlug"
 import { fetchGrupoBySlug } from "../services/groupService"
 import { supabaseEnabled } from "../lib/supabase"
+import { initialData } from "../data/mock"
 import type { Grupo } from "../types"
+
+const OFFICIAL_SLUG = "plasts-run"
 
 export function Convite() {
   const { slug } = useParams()
   const { me, data } = useApp()
   const [remoto, setRemoto] = useState<Grupo | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  const [loading, setLoading] = useState(Boolean(supabaseEnabled && slug))
+  const [loading, setLoading] = useState(Boolean(supabaseEnabled && slug && slug !== OFFICIAL_SLUG))
 
   useEffect(() => {
     if (!slug) return
@@ -25,22 +28,33 @@ export function Convite() {
       return
     }
     let cancel = false
-    setLoading(true)
-    setErro(null)
-    setRemoto(null)
+    if (slug !== OFFICIAL_SLUG) {
+      setLoading(true)
+      setErro(null)
+      setRemoto(null)
+    }
     void fetchGrupoBySlug(slug).then((grupo) => {
       if (cancel) return
       setLoading(false)
-      if (!grupo) setErro("Este convite não corresponde a um grupo.")
-      else setRemoto(grupo)
+      if (grupo) {
+        setErro(null)
+        setRemoto(grupo)
+        return
+      }
+      if (slug !== OFFICIAL_SLUG) setErro("Este convite não corresponde a um grupo.")
     })
     return () => {
       cancel = true
     }
   }, [slug])
 
-  const grupo = supabaseEnabled ? remoto : data.grupo
-  const ok = Boolean(grupo && (!slug || slug === grupo.slug))
+  const grupo = (() => {
+    if (remoto) return remoto
+    if (slug === OFFICIAL_SLUG) return initialData.grupo
+    if (!supabaseEnabled && data.grupo.slug && slug === data.grupo.slug) return data.grupo
+    return null
+  })()
+  const ok = Boolean(grupo)
 
   if (me) return <Navigate to="/" replace />
 
@@ -59,14 +73,14 @@ export function Convite() {
         </h1>
         {loading ? (
           <p className="mt-3 text-sand">Buscando o convite do grupo…</p>
-        ) : erro || !ok ? (
-          <p className="mt-3 text-sand">
-            {erro ?? "Este convite não corresponde a um grupo. Confira o link."}
-          </p>
-        ) : (
+        ) : ok && grupo ? (
           <p className="mt-3 text-sand">
             Entre com este link e você vira membro: agenda de treinos, check-in, feed e mensagens
             privadas com o clube.
+          </p>
+        ) : (
+          <p className="mt-3 text-sand">
+            {erro ?? "Este convite não corresponde a um grupo. Confira o link."}
           </p>
         )}
         {ok && !loading && (
