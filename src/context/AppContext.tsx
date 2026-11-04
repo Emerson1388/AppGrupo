@@ -324,7 +324,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const mail = email.trim().toLowerCase()
     const pass = password
-    const redirect = `${window.location.origin}/auth/callback`
 
     const finishCloud = async (user: User) => {
       const next = await hydrateGroupData(user.id, user.email ?? "")
@@ -339,19 +338,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const firstUser = first.data.user
       const firstErr = first.error
       const firstMsg = firstErr == null ? "" : firstErr.message
+      const firstCode = firstErr && "code" in firstErr ? String(firstErr.code) : ""
       if (!firstMsg && firstUser) return finishCloud(firstUser)
 
-      const unconfirmed = firstMsg.toLowerCase().includes("email not confirmed")
-      if (unconfirmed) {
-        await supabase.auth.resend({
-          type: "signup",
-          email: mail,
-          options: { emailRedirectTo: redirect },
-        })
-        return authErrorMessage(firstMsg)
-      }
-
-      return firstMsg ? authErrorMessage(firstMsg) : "Não foi possível entrar. Tente de novo."
+      return firstMsg ? authErrorMessage(firstMsg, firstCode) : "Não foi possível entrar. Tente de novo."
     }
     if (!localAuthAllowed()) return "Não foi possível entrar. Tente de novo."
     const result = await verifyLogin(mail, pass)
@@ -414,9 +404,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return { error: null }
             }
           }
-          return { error: "Esse e-mail já está cadastrado. Entre com a mesma senha — não crie outra conta." }
+          const signedCode = signed.error && "code" in signed.error ? String(signed.error.code) : ""
+          return {
+            error: authErrorMessage(
+              signed.error?.message || "Invalid login credentials",
+              signedCode || error.code,
+            ),
+          }
         }
-        return { error: authErrorMessage(error.message) }
+        return { error: authErrorMessage(error.message, error.code) }
       }
       const sessionUser = created.session?.user
         ?? (

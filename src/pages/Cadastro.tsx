@@ -131,7 +131,7 @@ export function Cadastro() {
           disabled={busy}
           className="w-full rounded-xl bg-ember py-3 text-sm font-bold text-on-accent disabled:opacity-60"
         >
-          {busy ? "Criando conta…" : "Criar conta e confirmar e-mail"}
+          {busy ? "Criando conta…" : "Criar conta"}
         </button>
       </form>
 

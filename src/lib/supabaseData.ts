@@ -29,13 +29,13 @@ type ProfileRow = {
   role: string
 }
 
-export function authErrorMessage(raw: string) {
-  const m = raw.toLowerCase()
-  if (m.includes("email not confirmed")) {
-    return "Abra o e-mail de confirmação. Sem esse clique a mesma senha não entra no celular."
+export function authErrorMessage(raw: string, code = "") {
+  const m = `${code} ${raw}`.toLowerCase()
+  if (m.includes("email_not_confirmed") || m.includes("email not confirmed")) {
+    return "A conta existe, mas ainda não foi liberada: o e-mail de confirmação não está chegando. No Supabase, SQL Editor, rode 20261104_login_dispositivos.sql e entre de novo com a mesma senha."
   }
-  if (m.includes("invalid login")) {
-    return "E-mail ou senha não conferem."
+  if (m.includes("invalid login") || m.includes("invalid_credentials")) {
+    return "E-mail ou senha não conferem. Se você se cadastrou agora, rode no SQL Editor o arquivo 20261104_login_dispositivos.sql — o e-mail de confirmação não está sendo enviado."
   }
   if (m.includes("already registered") || m.includes("already been registered")) {
     return "Esse e-mail já está cadastrado. Entre com a mesma senha — não crie outra conta."

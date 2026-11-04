@@ -1,5 +1,7 @@
--- Login em qualquer aparelho: e-mail já vale como confirmado e perfil sem grupo pode receber o Plast's Run.
--- Idempotente. Não apaga dados.
+-- COLE NO SQL EDITOR DO SUPABASE E CLIQUE EM RUN.
+-- Libera quem já se cadastrou (o e-mail de confirmação não está chegando)
+-- e faz os próximos cadastros já entrarem com a senha.
+-- Se o trigger der erro, selecione só o primeiro UPDATE e rode de novo.
 
 update auth.users
 set email_confirmed_at = coalesce(email_confirmed_at, now())
