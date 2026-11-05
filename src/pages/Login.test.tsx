@@ -18,7 +18,7 @@ describe("Login", () => {
   it("mostra o formulário do Plast's Run", () => {
     renderApp(<Login />, { route: "/login" })
     expect(screen.getByText(/Login · Plast's Run/i)).toBeInTheDocument()
-    expect(screen.getByText(/qualquer aparelho/i)).toBeInTheDocument()
+    expect(screen.getByText(/entre com seu e-mail e senha/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/^e-mail$/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/^senha$/i)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /entrar/i })).toBeInTheDocument()

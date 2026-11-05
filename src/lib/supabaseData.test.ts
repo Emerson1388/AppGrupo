@@ -9,7 +9,7 @@ import {
   officialFotoUrl,
   saveProfilePatch,
 } from "./supabaseData"
-import { localAuthAllowed } from "./supabase"
+import { localAuthAllowed, normalizeSupabaseUrl } from "./supabase"
 
 describe("authErrorMessage", () => {
   it("traduz e-mail não confirmado", () => {
@@ -105,6 +105,15 @@ describe("foto de perfil (fonte única)", () => {
 describe("fonte de verdade na nuvem", () => {
   it("testes unitários não usam auth local misturada com Supabase", () => {
     expect(localAuthAllowed()).toBe(true)
+  })
+
+  it("login usa a origem do projeto, não /rest/v1", () => {
+    expect(normalizeSupabaseUrl("https://nrzgxnacvljenqlmbglv.supabase.co/rest/v1/")).toBe(
+      "https://nrzgxnacvljenqlmbglv.supabase.co",
+    )
+    expect(normalizeSupabaseUrl("https://nrzgxnacvljenqlmbglv.supabase.co/")).toBe(
+      "https://nrzgxnacvljenqlmbglv.supabase.co",
+    )
   })
 
   it("erros de sync não viram silêncio", () => {

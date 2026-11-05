@@ -34,8 +34,7 @@ export function Login() {
   return (
     <AuthShell>
       <p className="mt-4 text-lg leading-snug text-sand">
-        Use o mesmo e-mail e a mesma senha em qualquer aparelho. A conta fica na nuvem, não só neste
-        celular ou computador.
+        Entre com seu e-mail e senha.
       </p>
 
       <div className="mt-8 rounded-3xl border border-line bg-card p-5">

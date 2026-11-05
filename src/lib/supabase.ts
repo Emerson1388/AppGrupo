@@ -8,7 +8,16 @@ function inUnitTest() {
   return import.meta.env.MODE === "test"
 }
 
-const fromEnvUrl = String(import.meta.env.VITE_SUPABASE_URL ?? "").trim()
+/** Auth e REST usam a origem do projeto, nunca /rest/v1 nem /auth/v1. */
+export function normalizeSupabaseUrl(raw: string) {
+  return raw
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/rest\/v1$/i, "")
+    .replace(/\/auth\/v1$/i, "")
+}
+
+const fromEnvUrl = normalizeSupabaseUrl(String(import.meta.env.VITE_SUPABASE_URL ?? ""))
 const fromEnvAnon = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim()
 
 const url = fromEnvUrl || (inUnitTest() ? "" : PUBLIC_URL)
