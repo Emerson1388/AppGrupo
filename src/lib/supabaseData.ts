@@ -41,7 +41,10 @@ export function authErrorMessage(raw: string, code = "") {
     return "Esse e-mail já está cadastrado. Entre com a mesma senha — não crie outra conta."
   }
   if (m.includes("database error") || m.includes("error saving user") || m.includes("error creating user")) {
-    return "Não foi possível criar a conta. Tente de novo."
+    return "O Auth recusou o cadastro e não gravou o usuário (trigger de perfil). Tente de novo depois de atualizar o trigger no banco."
+  }
+  if (m.includes("rate limit") || m.includes("over_email_send_rate_limit")) {
+    return "Muitas tentativas neste e-mail. Espere um minuto e tente de novo."
   }
   if (m.includes("password")) return "Senha inválida. Use pelo menos 8 caracteres."
   if (m.includes("failed to fetch") || m.includes("network") || m.includes("fetch")) {
@@ -52,6 +55,15 @@ export function authErrorMessage(raw: string, code = "") {
   }
   if (m.includes("authapi")) return "Não foi possível autenticar. Tente de novo."
   return "Não foi possível concluir. Tente de novo."
+}
+
+export function formatPublicAuthError(raw: string, code = "", status?: number) {
+  const friendly = authErrorMessage(raw, code)
+  const bits = [status ? `HTTP ${status}` : "", code, raw].filter((part) => Boolean(part && String(part).trim()))
+  const detail = bits.join(" · ")
+  if (!detail) return friendly
+  if (friendly.includes(raw)) return friendly
+  return `${friendly} [${detail}]`
 }
 
 export function cloudErrorMessage(raw: string) {
@@ -184,10 +196,15 @@ export async function ensureProfile(user: User): Promise<Profile | null> {
     role: "atleta",
     meta: "Começar e não parar",
   }
-  const { data: created, error } = await supabase.from("profiles").insert(row).select("*").single()
+  const { data: created, error } = await supabase
+    .from("profiles")
+    .upsert(row, { onConflict: "id" })
+    .select("*")
+    .maybeSingle()
   if (error || !created) {
-    if (error) logSyncError("profiles", "insert", error.message)
-    return null
+    if (error) logSyncError("profiles", "upsert", error.message)
+    const { data: retry } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()
+    return retry ? mapProfile(retry as ProfileRow, email) : null
   }
   return mapProfile(created as ProfileRow, email)
 }

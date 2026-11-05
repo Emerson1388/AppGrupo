@@ -25,6 +25,28 @@ const anon = fromEnvAnon || (inUnitTest() ? "" : PUBLIC_ANON)
 
 export const supabaseEnabled = Boolean(url && anon)
 
+export function supabaseAuthInfo() {
+  let host = ""
+  try {
+    host = url ? new URL(url).host : ""
+  } catch {
+    host = "invalid-url"
+  }
+  const keyKind = anon.startsWith("sb_publishable_")
+    ? "publishable"
+    : anon.startsWith("eyJ")
+      ? "jwt-anon"
+      : anon
+        ? "other"
+        : "missing"
+  return {
+    enabled: supabaseEnabled,
+    host,
+    keyKind,
+    keyChars: anon.length,
+  }
+}
+
 /** Contas em localStorage só no Vite de desenvolvimento, nunca no build de produção. */
 export function localAuthAllowed() {
   return !supabaseEnabled && import.meta.env.DEV

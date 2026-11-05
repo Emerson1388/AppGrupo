@@ -4,6 +4,7 @@ import {
   cloudErrorMessage,
   DEFAULT_AVATAR,
   embeddedFotoError,
+  formatPublicAuthError,
   logSyncError,
   mapProfile,
   officialFotoUrl,
@@ -25,7 +26,14 @@ describe("authErrorMessage", () => {
   })
 
   it("traduz erro de banco no cadastro", () => {
-    expect(authErrorMessage("Database error saving new user")).toMatch(/não foi possível criar/i)
+    expect(authErrorMessage("Database error saving new user")).toMatch(/não gravou o usuário|trigger/i)
+  })
+
+  it("não esconde o erro original do Auth no cadastro", () => {
+    const shown = formatPublicAuthError("Database error saving new user", "unexpected_failure", 500)
+    expect(shown).toMatch(/Database error saving new user/)
+    expect(shown).toMatch(/HTTP 500/)
+    expect(shown).toMatch(/unexpected_failure/)
   })
 
   it("traduz senha fraca do provedor", () => {

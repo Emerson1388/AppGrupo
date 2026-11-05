@@ -379,6 +379,8 @@ as $$
 declare
   gid uuid;
   slug text;
+  v_nivel text;
+  v_nome text;
 begin
   slug := nullif(trim(both from coalesce(new.raw_user_meta_data->>'grupo_slug', '')), '');
   if slug is not null then
@@ -386,18 +388,22 @@ begin
   else
     select id into gid from public.grupos where grupos.slug = 'plasts-run' limit 1;
   end if;
+  v_nivel := coalesce(nullif(trim(both from coalesce(new.raw_user_meta_data->>'nivel', '')), ''), 'iniciante');
+  if v_nivel not in ('iniciante', 'intermediario', 'avancado') then
+    v_nivel := 'iniciante';
+  end if;
+  v_nome := nullif(trim(both from coalesce(new.raw_user_meta_data->>'nome', '')), '');
+  if v_nome is null then
+    v_nome := split_part(coalesce(new.email, 'atleta'), '@', 1);
+  end if;
   insert into public.profiles (id, grupo_id, nome, email, nivel, role, meta)
-  values (
-    new.id,
-    gid,
-    coalesce(new.raw_user_meta_data->>'nome', split_part(new.email, '@', 1)),
-    new.email,
-    coalesce(new.raw_user_meta_data->>'nivel', 'iniciante'),
-    'atleta',
-    'Começar e não parar'
-  )
+  values (new.id, gid, v_nome, new.email, v_nivel, 'atleta', 'Começar e não parar')
   on conflict (id) do nothing;
   return new;
+exception
+  when others then
+    raise warning 'handle_new_user: %', sqlerrm;
+    return new;
 end;
 $$;
 

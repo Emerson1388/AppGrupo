@@ -23,12 +23,20 @@ import {
   verifyLogin,
 } from "../lib/accounts"
 import { passwordIssues } from "../lib/password"
-import { supabase, supabaseEnabled, localAuthAllowed } from "../lib/supabase"
+import {
+  emailDomain,
+  isAlreadyRegisteredError,
+  isDatabaseSignupError,
+  isDuplicateSignupUser,
+  logAuthEvent,
+} from "../lib/signupAuth"
+import { supabase, supabaseEnabled, localAuthAllowed, supabaseAuthInfo } from "../lib/supabase"
 import type { User } from "@supabase/supabase-js"
 import {
   authErrorMessage,
   DEFAULT_AVATAR,
   embeddedFotoError,
+  formatPublicAuthError,
   saveGrupoSpotify,
   saveProfilePatch,
 } from "../lib/supabaseData"
@@ -334,14 +342,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (supabaseEnabled) {
       if (!supabase) return "Nuvem não configurada."
+      logAuthEvent("login:start", {
+        ...supabaseAuthInfo(),
+        emailDomain: emailDomain(mail),
+        emailChars: mail.length,
+        passwordChars: pass.length,
+      })
       const first = await supabase.auth.signInWithPassword({ email: mail, password: pass })
       const firstUser = first.data.user
       const firstErr = first.error
       const firstMsg = firstErr == null ? "" : firstErr.message
       const firstCode = firstErr && "code" in firstErr ? String(firstErr.code) : ""
+      const firstStatus = firstErr && "status" in firstErr ? Number(firstErr.status) : undefined
+      logAuthEvent("login:result", {
+        ok: !firstErr && Boolean(firstUser),
+        message: firstMsg,
+        code: firstCode,
+        status: firstStatus ?? 0,
+        hasUser: Boolean(firstUser),
+      })
       if (!firstMsg && firstUser) return finishCloud(firstUser)
 
-      return firstMsg ? authErrorMessage(firstMsg, firstCode) : "Não foi possível entrar. Tente de novo."
+      return firstMsg ? formatPublicAuthError(firstMsg, firstCode, firstStatus) : "Não foi possível entrar. Tente de novo."
     }
     if (!localAuthAllowed()) return "Não foi possível entrar. Tente de novo."
     const result = await verifyLogin(mail, pass)
@@ -377,10 +399,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (supabaseEnabled) {
       if (!supabase) return { error: "Nuvem não configurada." }
+      const client = supabase
       const mail = input.email.trim().toLowerCase()
       const pass = input.password
       const redirect = `${window.location.origin}/auth/callback`
-      const { data: created, error } = await supabase.auth.signUp({
+      const enterExisting = async () => {
+        const signed = await client.auth.signInWithPassword({ email: mail, password: pass })
+        if (signed.error || !signed.data.user) {
+          const code = signed.error && "code" in signed.error ? String(signed.error.code) : ""
+          return {
+            error: authErrorMessage(
+              signed.error?.message || "Invalid login credentials",
+              code,
+            ),
+          }
+        }
+        const next = await hydrateGroupData(signed.data.user.id, signed.data.user.email ?? "")
+        if (!next) {
+          return { error: "Conta autenticada, mas o perfil do grupo não carregou. Tente Entrar de novo." }
+        }
+        setData(next)
+        return { error: null as string | null }
+      }
+
+      logAuthEvent("signup:start", {
+        ...supabaseAuthInfo(),
+        emailDomain: emailDomain(mail),
+        emailChars: mail.length,
+        passwordChars: pass.length,
+        nomeChars: input.nome.trim().length,
+        nivel: input.nivel,
+        redirectHost: (() => {
+          try {
+            return new URL(redirect).host
+          } catch {
+            return "invalid"
+          }
+        })(),
+      })
+      const { data: created, error } = await client.auth.signUp({
         email: mail,
         password: pass,
         options: {
@@ -392,35 +449,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
           },
         },
       })
-      if (error) {
-        const already = error.message.toLowerCase().includes("already registered")
-          || error.message.toLowerCase().includes("already been registered")
-        if (already) {
-          const signed = await supabase.auth.signInWithPassword({ email: mail, password: pass })
-          if (!signed.error && signed.data.user) {
-            const next = await hydrateGroupData(signed.data.user.id, signed.data.user.email ?? "")
-            if (next) {
-              setData(next)
-              return { error: null }
-            }
+      logAuthEvent("signup:result", {
+        ok: !error,
+        message: error?.message ?? "",
+        code: error && "code" in error ? String(error.code ?? "") : "",
+        status: error && "status" in error ? Number(error.status) || 0 : 0,
+        hasUser: Boolean(created.user),
+        hasSession: Boolean(created.session),
+        identityCount: created.user?.identities?.length ?? 0,
+      })
+      if (error || isDuplicateSignupUser(created.user)) {
+        const already = isAlreadyRegisteredError(error?.message ?? "", error?.code)
+          || isDuplicateSignupUser(created.user)
+        const dbFail = isDatabaseSignupError(error?.message ?? "", error?.code)
+        if (already || dbFail) {
+          const entered = await enterExisting()
+          if (!entered.error) return entered
+          if (already) {
+            return { error: "Esse e-mail já está cadastrado. Entre com a mesma senha — não crie outra conta." }
           }
-          const signedCode = signed.error && "code" in signed.error ? String(signed.error.code) : ""
           return {
-            error: authErrorMessage(
-              signed.error?.message || "Invalid login credentials",
-              signedCode || error.code,
+            error: formatPublicAuthError(
+              error?.message ?? "Database error saving new user",
+              error?.code,
+              error && "status" in error ? Number(error.status) : undefined,
             ),
           }
         }
-        return { error: authErrorMessage(error.message, error.code) }
+        return {
+          error: formatPublicAuthError(
+            error?.message ?? "Não foi possível concluir.",
+            error?.code,
+            error && "status" in error ? Number(error.status) : undefined,
+          ),
+        }
       }
       const sessionUser = created.session?.user
         ?? (
-          await supabase.auth.signInWithPassword({ email: mail, password: pass })
+          await client.auth.signInWithPassword({ email: mail, password: pass })
         ).data.user
       if (sessionUser) {
         const next = await hydrateGroupData(sessionUser.id, sessionUser.email ?? "")
-        if (!next) return { error: "Não foi possível carregar o grupo. Tente entrar de novo." }
+        if (!next) return { error: "Conta autenticada, mas o perfil do grupo não carregou. Tente Entrar de novo." }
         setData(next)
         return { error: null }
       }
